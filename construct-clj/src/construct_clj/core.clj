@@ -28,8 +28,8 @@
 
 (defn- make-primitive-spec
   [& {:keys [repr static-size dynamic-size parse]}]
-  {:pre [(not (nil? parse))]}
-         (not (nil? repr))
+  {:pre [(not (nil? parse))
+         (not (nil? repr))]}
   {:primitive? true
    :repr repr
    :parse parse
