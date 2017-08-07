@@ -114,24 +114,39 @@
   (apply str
     (map #(format "%02x" (bit-and 0xFF (int %))) s)))
 
-
 (defn unhexify [hex]
   (apply str
     (map
       (fn [[x y]] (char (Integer/parseInt (str x y) 16))
         (partition 2 hex)))))
 
+(defn byte-buffer->byte-array
+  ([byte-buffer count]
+   (byte-array (map #(byte (read-int8 byte-buffer %)) (range count))))
+  ([byte-buffer]
+   (byte-buffer->byte-array byte-buffer (.limit byte-buffer))))
+
+(defn slice-byte-buffer
+  ([byte-buffer start end]
+   (.position byte-buffer start)
+   (let [slice (.slice byte-buffer)
+         slice-size (- end start)]
+     (.position byte-buffer 0)
+     ;; if end is greater than the limit, truncate to limit.
+     (when (> (.limit slice) slice-size)
+       (.limit slice slice-size))
+     slice))
+  ([byte-buffer start]
+   (slice-byte-buffer byte-buffer (.limit byte-buffer))))
 
 (defn repr-bytes
   [byte-buffer]
-  (let [limit (.limit byte-buffer)
-        chunk-size (min 0x10 limit)
-        chunk (byte-array chunk-size)]
-    (.get byte-buffer chunk 0 chunk-size)
-    (if (> limit chunk-size)
+  (let [max-chunk 0x6  ;; this uses (6 * 2) + 3 == 15 characters
+        chunk-buf (slice-byte-buffer byte-buffer 0 max-chunk)
+        chunk (byte-buffer->byte-array chunk-buf)]
+    (if (> (.limit byte-buffer) max-chunk)
       (str (hexify chunk) "...")
       (hexify chunk))))
-
 
 (defn bytes
   [count]

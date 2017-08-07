@@ -16,6 +16,14 @@
     (is (= (get-spec-parsed-length int64 nil) 8))))
 
 
+(defn uint32->byte-buffer
+  [integer]
+  (let [byte-buffer (ByteBuffer/allocate 4)]
+    (.order byte-buffer ByteOrder/BIG_ENDIAN)
+    (.putInt byte-buffer 0 integer)
+    byte-buffer))
+
+
 (defn uint64->byte-buffer
   [integer]
   (let [byte-buffer (ByteBuffer/allocate 8)]
@@ -61,6 +69,8 @@
     (is (= (repr-hex 1) "0x1"))
     (is (= (repr-hex 16) "0x10"))
     (is (= (repr-hex 256) "0x100")))
-  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
-    (testing "bytes"
-      (is (= (repr-bytes byte-buffer) "1122334455667788")))))
+  (testing "bytes"
+    (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
+      (is (= (repr-bytes byte-buffer) "112233445566...")))
+    (let [byte-buffer (uint32->byte-buffer 0x11223344)]
+      (is (= (repr-bytes byte-buffer) "11223344")))))
