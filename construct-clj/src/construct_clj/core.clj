@@ -96,6 +96,34 @@
                                          ([byte-buffer offset] (.getLong byte-buffer offset))
                                          ([byte-buffer] (parse byte-buffer 0)))))
 
+(defn hexify [s]
+  (apply str
+    (map #(format "%02x" (int %)) s)))
+
+
+(defn unhexify [hex]
+  (apply str
+    (map
+      (fn [[x y]] (char (Integer/parseInt (str x y) 16))
+        (partition 2 hex)))))
+
+
+(defn repr-bytes
+  [byte-buffer]
+  (let [limit (.limit byte-buffer)
+        chunk-size (min 0x10 limit)
+        chunk (byte-array chunk-size)]
+    (.get byte-buffer chunk 0 chunk-size)
+    (if (> limit chunk-size)
+      (str (hexify chunk) "...")
+      (hexify chunk))))
+
+
+(defn bytes
+  [count]
+  (make-primitive-spec :static-size count
+                       :repr repr-bytes))
+
 
 ;; instance:
 ;; {

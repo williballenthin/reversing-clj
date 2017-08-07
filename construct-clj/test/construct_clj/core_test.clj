@@ -15,10 +15,17 @@
     (is (= (get-spec-parsed-length uint64 nil) 8))
     (is (= (get-spec-parsed-length int64 nil) 8))))
 
-(deftest primitive-parse-test
+
+(defn uint64->byte-buffer
+  [integer]
   (let [byte-buffer (ByteBuffer/allocate 8)]
     (.order byte-buffer ByteOrder/BIG_ENDIAN)
-    (.putLong byte-buffer 0 0x1122334455667788)
+    (.putLong byte-buffer 0 integer)
+    byte-buffer))
+
+
+(deftest primitive-parse-test
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
     (testing "numbers"
       (is (= (parse uint8 byte-buffer) 0x11))
       (is (= (parse int8 byte-buffer) 0x11))
@@ -41,3 +48,21 @@
       (is (= (parse uint64 byte-buffer) 0xFFFFFFFFFFFFFFFF))
       (is (= (parse int64 byte-buffer) -1)))))
 
+
+(deftest hexify-test
+  (let [bytes (byte-array 0x10)]
+    (doseq [i (range 0x10)]
+      (aset-byte bytes i i))
+    (testing "hexify"
+      (is (= (hexify bytes) "000102030405060708090a0b0c0d0e0f")))))
+
+
+(deftest repr-test
+  (testing "numbers"
+    (is (= (repr-hex 0) "0x0"))
+    (is (= (repr-hex 1) "0x1"))
+    (is (= (repr-hex 16) "0x10"))
+    (is (= (repr-hex 256) "0x100")))
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
+    (testing "bytes"
+      (is (= (repr-bytes byte-buffer) "1122334455667788")))))
