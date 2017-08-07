@@ -35,9 +35,7 @@
       (is (= (parse int32 byte-buffer) 0x11223344))
       (is (= (parse uint64 byte-buffer) 0x1122334455667788))
       (is (= (parse int64 byte-buffer) 0x1122334455667788))))
-  (let [byte-buffer (ByteBuffer/allocate 8)]
-    (.order byte-buffer ByteOrder/BIG_ENDIAN)
-    (.putLong byte-buffer 0 -1)
+  (let [byte-buffer (uint64->byte-buffer -1)]
     (testing "signed numbers"
       (is (= (parse uint8 byte-buffer) 0xFF))
       (is (= (parse int8 byte-buffer) -1))
