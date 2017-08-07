@@ -40,10 +40,24 @@
 (def repr-hex (partial format "0x%x"))
 
 
+(defn read-uint8
+  ([byte-buffer offset]
+   (bit-and 0xFF (long (.get byte-buffer offset))))
+  ([byte-buffer]
+   (read-uint8 byte-buffer 0)))
+
+
+(defn read-int8
+  ([byte-buffer offset]
+   (.get byte-buffer offset))
+  ([byte-buffer]
+   (read-int8 byte-buffer 0)))
+
+
 (def uint8 (make-primitive-spec :static-size 1
                                 :repr repr-hex
                                 :parse (fn parse
-                                         ([byte-buffer offset] (bit-and 0xFF (long (.get byte-buffer offset))))
+                                         ([byte-buffer offset] (read-uint8 byte-buffer))
                                          ([byte-buffer] (parse byte-buffer 0)))))
 
 
