@@ -9,10 +9,14 @@ features:
   - lazy unpacking - only unpack what is required
   - cache parsed results
   - maybe clojure map syntax is possible?
+    - no: if we want a map, use `unpack` and create a map.
+    - technical reason: can't update the cache in place.
   - avoid copying data from mmap
   - be able to query the underlying offsets for some field
   - union types would be cool!
   - built-in repr?
+    - resolve enums using a map
+    - resolve bitfields using some data structure
 
 wants:
   - want: stream unpacking - unpack from a sequence of bytes
@@ -20,8 +24,6 @@ wants:
 
 questions:
   - what about decompressed buffers?
-
-## protocols
 
 
 ### unpacker
@@ -77,24 +79,24 @@ here's how we minimize the amount of work to do:
 
 (def dos-header (make-spec
                  (struct
-                   ;; this needs to take ordered kwargs and maintain them
-
-                   ;; always is a validator
-                   :sig (always (ascii-char 2) "MZ")
-                   :lastsize uint16
-                   :nblocks uint16
-                   :nreloc uint16
-                   :hdrsize uint16
-                   :minalloc uint16
-                   :ss (bytes 2)
-                   :sp (bytes 2)
-                   :checksum uint16
-                   :ip (bytes 2)
-                   :cs (bytes 2)
-                   :relocpos uint16
-                   :noverlay uint16
-                   :reserved1 (array uint16 4)
-                   :oem_id uint16
-                   :oem_info uint16
-                   :e_lfanew uint32)))
+                   :static-size ...
+                   :fields [
+                    ;; `always` is a validator
+                    :sig (always (ascii-char 2) "MZ")
+                    :lastsize uint16
+                    :nblocks uint16
+                    :nreloc uint16
+                    :hdrsize uint16
+                    :minalloc uint16
+                    :ss (bytes 2)
+                    :sp (bytes 2)
+                    :checksum uint16
+                    :ip (bytes 2)
+                    :cs (bytes 2)
+                    :relocpos uint16
+                    :noverlay uint16
+                    :reserved1 (array uint16 4)
+                    :oem_id uint16
+                    :oem_info uint16
+                    :e_lfanew uint32])))
 ```
