@@ -38,49 +38,59 @@
 
 (def uint8 (make-primitive-spec :static-size 1
                                 :repr repr-hex
-                                :parse (fn [byte-buffer]
-                                         (bit-and 0xFF (long (.get byte-buffer 0))))))
+                                :parse (fn parse
+                                         ([byte-buffer offset] (bit-and 0xFF (long (.get byte-buffer offset))))
+                                         ([byte-buffer] (parse byte-buffer 0)))))
+
 
 (def int8 (make-primitive-spec :static-size 1
                                :repr repr-hex
-                               :parse (fn [byte-buffer]
-                                        (.get byte-buffer))))
+                               :parse (fn parse
+                                        ([byte-buffer offset] (.get byte-buffer offset))
+                                        ([byte-buffer] (parse byte-buffer 0)))))
 
 (def uint16 (make-primitive-spec :static-size 2
                                  :repr repr-hex
-                                 :parse (fn [byte-buffer]
-                                          (bit-and 0xFFFF (long (.getShort byte-buffer 0))))))
+                                 :parse (fn parse
+                                          ([byte-buffer offset] (bit-and 0xFFFF (long (.getShort byte-buffer offset))))
+                                          ([byte-buffer] (parse byte-buffer 0)))))
 
 (def int16 (make-primitive-spec :static-size 2
                                 :repr repr-hex
-                                :parse (fn [byte-buffer]
-                                         (.getShort byte-buffer 0))))
+                                :parse (fn parse
+                                         ([byte-buffer offset] (.getShort byte-buffer offset))
+                                         ([byte-buffer] (parse byte-buffer 0)))))
 
 (def uint32 (make-primitive-spec :static-size 4
                                  :repr repr-hex
-                                 :parse (fn [byte-buffer]
-                                          (bit-and 0xFFFFFFFF (long (.getInt byte-buffer 0))))))
+                                 :parse (fn parse
+                                          ([byte-buffer offset] (bit-and 0xFFFFFFFF (long (.getInt byte-buffer offset))))
+                                          ([byte-buffer] (parse byte-buffer 0)))))
 
 (def int32 (make-primitive-spec :static-size 4
                                 :repr repr-hex
-                                :parse (fn [byte-buffer]
-                                         (.getInt byte-buffer 0))))
+                                :parse (fn parse
+                                         ([byte-buffer offset] (.getInt byte-buffer offset))
+                                         ([byte-buffer] (parse byte-buffer 0)))))
 
 (def uint64 (make-primitive-spec :static-size 8
                                  :repr repr-hex
-                                 :parse (fn [byte-buffer]
-                                          ;; via: github.com/geoffsalmon/bytebuffer
-                                          (let [l (.getLong byte-buffer 0)]
-                                            (if (>= l 0)
-                                              l
-                                              ;; add 2^64 to treat the negative 64bit 2's complement
-                                              ;; num as unsigned.
-                                              (+ 18446744073709551616N (bigint l)))))))
+                                 :parse (fn parse
+                                          ([byte-buffer offset]
+                                           ;; via: github.com/geoffsalmon/bytebuffer
+                                           (let [l (.getLong byte-buffer offset)]
+                                             (if (>= l 0)
+                                               l
+                                               ;; add 2^64 to treat the negative 64bit 2's complement
+                                               ;; num as unsigned.
+                                               (+ 18446744073709551616N (bigint l)))))
+                                          ([byte-buffer] (parse byte-buffer 0)))))
 
 (def int64 (make-primitive-spec :static-size 8
                                 :repr repr-hex
-                                :parse (fn [byte-buffer]
-                                         (.getLong byte-buffer 0))))
+                                :parse (fn parse
+                                         ([byte-buffer offset] (.getLong byte-buffer offset))
+                                         ([byte-buffer] (parse byte-buffer 0)))))
 
 
 ;; instance:
