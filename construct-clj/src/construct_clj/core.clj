@@ -112,7 +112,7 @@
 
 (defn hexify [s]
   (apply str
-    (map #(format "%02x" (int %)) s)))
+    (map #(format "%02x" (bit-and 0xFF (int %))) s)))
 
 
 (defn unhexify [hex]
