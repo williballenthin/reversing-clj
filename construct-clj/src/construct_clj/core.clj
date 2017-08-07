@@ -12,6 +12,13 @@
 ;;   :dynamic-size optional-function: (fn [byte-buffer]->integer)
 
 
+
+(defn struct
+  ;; will need to compute static-size if all fields are static
+  ;;  or dynamic-size, if all fields are either static or dynamic
+  [])
+
+
 (defn make-spec
   [base-spec & {:keys [repr static-size dynamic-size]}]
   {:repr repr
@@ -21,11 +28,8 @@
 
 (defn- make-primitive-spec
   [& {:keys [repr static-size dynamic-size parse]}]
-  ;; TODO: use clojure facilities for checking these args
-  (when (nil? parse)
-    (throw (Exception. "primitive requires parse function")))
-  (when (nil? repr)
-    (throw (Exception. "primitive requires repr function")))
+  {:pre [(not (nil? parse))]}
+         (not (nil? repr))
   {:primitive? true
    :repr repr
    :parse parse
