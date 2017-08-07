@@ -110,18 +110,25 @@
                                          ([byte-buffer offset] (.getLong byte-buffer offset))
                                          ([byte-buffer] (parse byte-buffer 0)))))
 
-(defn hexify [s]
+(defn hexify
+  "Hex format the give byte-array.
+
+   Args:
+    s (byte-array): the bytes to format."
+  [s]
   (apply str
+    ;; java bytes are signed, so we have to mask them down to uint8
     (map #(format "%02x" (bit-and 0xFF (int %))) s)))
 
 (defn unhexify [hex]
   (apply str
     (map
       (fn [[x y]] (char (Integer/parseInt (str x y) 16))
-        (partition 2 hex)))))
+      (partition 2 hex)))))
 
 (defn byte-buffer->byte-array
   ([byte-buffer count]
+   ;; java bytes are signed, so we have to keep them signed here.
    (byte-array (map #(byte (read-int8 byte-buffer %)) (range count))))
   ([byte-buffer]
    (byte-buffer->byte-array byte-buffer (.limit byte-buffer))))

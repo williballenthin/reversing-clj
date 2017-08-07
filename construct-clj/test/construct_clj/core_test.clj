@@ -60,7 +60,10 @@
     (doseq [i (range 0x10)]
       (aset-byte bytes i i))
     (testing "hexify"
-      (is (= (hexify bytes) "000102030405060708090a0b0c0d0e0f")))))
+      (is (= (hexify bytes) "000102030405060708090a0b0c0d0e0f")))
+    (testing "unhexify"
+      ;; round-trippin'
+      (is (= (hexify (unhexify (hexify bytes))) "000102030405060708090a0b0c0d0e0f")))))
 
 
 (deftest repr-test
