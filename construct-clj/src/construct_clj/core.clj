@@ -6,18 +6,39 @@
   [& args]
   (println "Hello, World!"))
 
+
+(defn parse
+  [spec byte-buffer]
+  (if (:primitive? spec)
+    {:result (apply (:parse spec) [byte-buffer])
+     :spec spec}
+    ;; TODO
+    (throw (Exception. (str "parse not implemented on non-primitive specs")))))
+
+(defn unpack
+  [parsed-results]
+  (let [spec (:spec parsed-results)]
+    (when (not (:primitive? spec))
+      ;; TODO
+      (throw (Exception. "unpack not implemented on non-primitive specs")))
+    (if (some? (:unpack spec))
+      (apply (:unpack spec) [parsed-results])
+      (:result parsed-results))))
+
+(defn repr
+  [instance]
+  (apply (:repr (:spec instance)) [(:result instance)]))
+
+
 ;; spec:
 ;; {
 ;;   :static-size optional-integer
 ;;   :dynamic-size optional-function: (fn [byte-buffer]->integer)
 
-
-
 (defn struct
   ;; will need to compute static-size if all fields are static
   ;;  or dynamic-size, if all fields are either static or dynamic
   [])
-
 
 (defn make-spec
   [base-spec & {:keys [repr static-size dynamic-size]}]
@@ -25,20 +46,18 @@
    :static-size static-size
    :dynamic-size dynamic-size})
 
-
 (defn- make-primitive-spec
-  [& {:keys [repr static-size dynamic-size parse]}]
+  [& {:keys [repr static-size dynamic-size parse unpack]}]
   {:pre [(not (nil? parse))
          (not (nil? repr))]}
   {:primitive? true
    :repr repr
    :parse parse
+   :unpack unpack
    :static-size static-size
    :dynamic-size dynamic-size})
 
-
 (def repr-hex (partial format "0x%x"))
-
 
 (defn read-uint8
   ([byte-buffer offset]
@@ -46,54 +65,51 @@
   ([byte-buffer]
    (read-uint8 byte-buffer 0)))
 
-
 (defn read-int8
   ([byte-buffer offset]
    (.get byte-buffer offset))
   ([byte-buffer]
    (read-int8 byte-buffer 0)))
 
-
 (def uint8 (make-primitive-spec :static-size 1
                                 :repr repr-hex
-                                :parse (fn parse
+                                :parse (fn uint8-parse
                                          ([byte-buffer offset] (read-uint8 byte-buffer))
-                                         ([byte-buffer] (parse byte-buffer 0)))))
-
+                                         ([byte-buffer] (uint8-parse byte-buffer 0)))))
 
 (def int8 (make-primitive-spec :static-size 1
                                :repr repr-hex
-                               :parse (fn parse
+                               :parse (fn int8-parse
                                         ([byte-buffer offset] (.get byte-buffer offset))
-                                        ([byte-buffer] (parse byte-buffer 0)))))
+                                        ([byte-buffer] (int8-parse byte-buffer 0)))))
 
 (def uint16 (make-primitive-spec :static-size 2
                                  :repr repr-hex
-                                 :parse (fn parse
+                                 :parse (fn uint16-parse
                                           ([byte-buffer offset] (bit-and 0xFFFF (long (.getShort byte-buffer offset))))
-                                          ([byte-buffer] (parse byte-buffer 0)))))
+                                          ([byte-buffer] (uint16-parse byte-buffer 0)))))
 
 (def int16 (make-primitive-spec :static-size 2
                                 :repr repr-hex
-                                :parse (fn parse
+                                :parse (fn int16-parse
                                          ([byte-buffer offset] (.getShort byte-buffer offset))
-                                         ([byte-buffer] (parse byte-buffer 0)))))
+                                         ([byte-buffer] (int16-parse byte-buffer 0)))))
 
 (def uint32 (make-primitive-spec :static-size 4
                                  :repr repr-hex
-                                 :parse (fn parse
+                                 :parse (fn uint32-parse
                                           ([byte-buffer offset] (bit-and 0xFFFFFFFF (long (.getInt byte-buffer offset))))
-                                          ([byte-buffer] (parse byte-buffer 0)))))
+                                          ([byte-buffer] (uint32-parse byte-buffer 0)))))
 
 (def int32 (make-primitive-spec :static-size 4
                                 :repr repr-hex
-                                :parse (fn parse
+                                :parse (fn int32-parse
                                          ([byte-buffer offset] (.getInt byte-buffer offset))
-                                         ([byte-buffer] (parse byte-buffer 0)))))
+                                         ([byte-buffer] (int32-parse byte-buffer 0)))))
 
 (def uint64 (make-primitive-spec :static-size 8
                                  :repr repr-hex
-                                 :parse (fn parse
+                                 :parse (fn uint64-parse
                                           ([byte-buffer offset]
                                            ;; via: github.com/geoffsalmon/bytebuffer
                                            (let [l (.getLong byte-buffer offset)]
@@ -102,13 +118,13 @@
                                                ;; add 2^64 to treat the negative 64bit 2's complement
                                                ;; num as unsigned.
                                                (+ 18446744073709551616N (bigint l)))))
-                                          ([byte-buffer] (parse byte-buffer 0)))))
+                                          ([byte-buffer] (uint64-parse byte-buffer 0)))))
 
 (def int64 (make-primitive-spec :static-size 8
                                 :repr repr-hex
-                                :parse (fn parse
+                                :parse (fn int64-parse
                                          ([byte-buffer offset] (.getLong byte-buffer offset))
-                                         ([byte-buffer] (parse byte-buffer 0)))))
+                                         ([byte-buffer] (int64-parse byte-buffer 0)))))
 
 (defn hexify
   "Hex format the give byte-array.
@@ -146,7 +162,7 @@
        (.limit slice slice-size))
      slice))
   ([byte-buffer start]
-   (slice-byte-buffer byte-buffer (.limit byte-buffer))))
+   (slice-byte-buffer byte-buffer start (.limit byte-buffer))))
 
 (defn repr-bytes
   [byte-buffer]
@@ -163,10 +179,27 @@
   [count]
   (make-primitive-spec :static-size count
                        :repr repr-bytes
-                       :parse (fn parse
+                       :parse (fn byte-seq-parse
                                 ([byte-buffer offset] (slice-byte-buffer byte-buffer offset (+ offset count)))
                                 ([byte-buffer] (slice-byte-buffer byte-buffer 0 count)))))
 
+
+(defn array
+  [spec count]
+  (when (nil? (:static-size spec))
+    (throw (Exception. "arrays with elements of dynamic size are not yet supported")))
+  (let [size (* count (:static-size spec))]
+    (make-primitive-spec :static-size size
+                         :repr #(str "[ " (clojure.string/join ", " (map repr %)) " ]")
+                         :parse (fn array-parse
+                                 ([byte-buffer offset]
+                                  (into [] (for [i (range count)]
+                                             (let [element-offset (+ offset (* i (:static-size spec)))
+                                                   element-buffer (slice-byte-buffer byte-buffer element-offset)]
+                                               (parse spec element-buffer)))))
+                                 ([byte-buffer] (array-parse byte-buffer 0)))
+                         :unpack (fn [unpack-results]
+                                   (into [] (map unpack (:result unpack-results)))))))
 
 ;; instance:
 ;; {
@@ -175,24 +208,6 @@
 ;;   :parsed-size integer
 ;; }
 
-(defn parse
-  [spec byte-buffer]
-  (if (:primitive? spec)
-    {:result (apply (:parse spec) [byte-buffer])
-     :spec spec}
-    ;; TODO: !!!
-    (throw (Exception. "parse not implemented on non-primitive specs"))))
-
-(defn unpack
-  [spec byte-buffer]
-  (if (:primitive? spec)
-    (apply (:parse spec) [byte-buffer])
-    ;; TODO: !!!
-    (throw (Exception. "parse not implemented on non-primitive specs"))))
-
-(defn repr
-  [instance]
-  (apply (:repr (:spec instance)) [(:result instance)]))
 
 (defn- get-instance-semiparsed-length
   "Get the total length of an instance that has been partially, but not fully, parsed."
