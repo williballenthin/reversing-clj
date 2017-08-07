@@ -33,10 +33,10 @@ it sometimes called a:
   - "spec" ([ref](https://github.com/clojurewerkz/buffy)).
 
 `parse` returns a parsing context for the given structure and byte buffer.
-use this for doing partial parsing?
+fields are parsed lazily.
 
-`unpack` returns a clojure datastructure for the given struct and byte buffer.
-it does all the parsing aggressively?
+`unpack` returns a clojure data structure for the given struct and byte buffer.
+all parsing is done in one go.
 
 a key part of lazy structure parsing is knowing where to find fields.
 fields are laid out consecutively, so we need to know the length of each field
@@ -70,10 +70,14 @@ here's how we minimize the amount of work to do:
                :repr #(clojure.string/join "." %)))
 
 (unpack ip-addr "\xC0\xA8\x02\x01")
->>> [192, 168, 0, 0]
+>>> [192, 168, 0, 1]
+
+(repr (parse ip-addr "\xC0\xA8\x02\x01"))
+>>> "192.168.0.1"
 
 (def dos-header (make-spec
-                 (struct                ;; this needs to take ordered kwargs and maintain them
+                 (struct
+                   ;; this needs to take ordered kwargs and maintain them
 
                    ;; always is a validator
                    :sig (always (ascii-char 2) "MZ")
