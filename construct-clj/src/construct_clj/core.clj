@@ -113,6 +113,8 @@
 (defn hexify
   "Hex format the give byte-array.
 
+  If the argument is not a byte array, it should be a sequence of `byte` instances.
+
    Args:
     s (byte-array): the bytes to format."
   [s]
@@ -123,8 +125,8 @@
 (defn unhexify [hex]
   (apply str
     (map
-      (fn [[x y]] (char (Integer/parseInt (str x y) 16))
-      (partition 2 hex)))))
+      (fn [[x y]] (char (Integer/parseInt (str x y) 16)))
+      (partition 2 hex))))
 
 (defn byte-buffer->byte-array
   ([byte-buffer count]
@@ -155,10 +157,15 @@
       (str (hexify chunk) "...")
       (hexify chunk))))
 
-(defn bytes
+(defn byte-sequence
+  "byte-sequence maps to the native type `ByteBuffer`."
+  ;; TODO: move to its own module and refer to using namespace.
   [count]
   (make-primitive-spec :static-size count
-                       :repr repr-bytes))
+                       :repr repr-bytes
+                       :parse (fn parse
+                                ([byte-buffer offset] (slice-byte-buffer byte-buffer offset (+ offset count)))
+                                ([byte-buffer] (slice-byte-buffer byte-buffer 0 count)))))
 
 
 ;; instance:
@@ -171,9 +178,21 @@
 (defn parse
   [spec byte-buffer]
   (if (:primitive? spec)
+    {:result (apply (:parse spec) [byte-buffer])
+     :spec spec}
+    ;; TODO: !!!
+    (throw (Exception. "parse not implemented on non-primitive specs"))))
+
+(defn unpack
+  [spec byte-buffer]
+  (if (:primitive? spec)
     (apply (:parse spec) [byte-buffer])
     ;; TODO: !!!
     (throw (Exception. "parse not implemented on non-primitive specs"))))
+
+(defn repr
+  [instance]
+  (apply (:repr (:spec instance)) [(:result instance)]))
 
 (defn- get-instance-semiparsed-length
   "Get the total length of an instance that has been partially, but not fully, parsed."

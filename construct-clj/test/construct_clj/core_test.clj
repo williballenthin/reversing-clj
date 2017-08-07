@@ -35,24 +35,29 @@
 (deftest primitive-parse-test
   (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
     (testing "numbers"
-      (is (= (parse uint8 byte-buffer) 0x11))
-      (is (= (parse int8 byte-buffer) 0x11))
-      (is (= (parse uint16 byte-buffer) 0x1122))
-      (is (= (parse int16 byte-buffer) 0x1122))
-      (is (= (parse uint32 byte-buffer) 0x11223344))
-      (is (= (parse int32 byte-buffer) 0x11223344))
-      (is (= (parse uint64 byte-buffer) 0x1122334455667788))
-      (is (= (parse int64 byte-buffer) 0x1122334455667788))))
+      (is (= (unpack uint8 byte-buffer) 0x11))
+      (is (= (unpack int8 byte-buffer) 0x11))
+      (is (= (unpack uint16 byte-buffer) 0x1122))
+      (is (= (unpack int16 byte-buffer) 0x1122))
+      (is (= (unpack uint32 byte-buffer) 0x11223344))
+      (is (= (unpack int32 byte-buffer) 0x11223344))
+      (is (= (unpack uint64 byte-buffer) 0x1122334455667788))
+      (is (= (unpack int64 byte-buffer) 0x1122334455667788))))
   (let [byte-buffer (uint64->byte-buffer -1)]
     (testing "signed numbers"
-      (is (= (parse uint8 byte-buffer) 0xFF))
-      (is (= (parse int8 byte-buffer) -1))
-      (is (= (parse uint16 byte-buffer) 0xFFFF))
-      (is (= (parse int16 byte-buffer) -1))
-      (is (= (parse uint32 byte-buffer) 0xFFFFFFFF))
-      (is (= (parse int32 byte-buffer) -1))
-      (is (= (parse uint64 byte-buffer) 0xFFFFFFFFFFFFFFFF))
-      (is (= (parse int64 byte-buffer) -1)))))
+      (is (= (unpack uint8 byte-buffer) 0xFF))
+      (is (= (unpack int8 byte-buffer) -1))
+      (is (= (unpack uint16 byte-buffer) 0xFFFF))
+      (is (= (unpack int16 byte-buffer) -1))
+      (is (= (unpack uint32 byte-buffer) 0xFFFFFFFF))
+      (is (= (unpack int32 byte-buffer) -1))
+      (is (= (unpack uint64 byte-buffer) 0xFFFFFFFFFFFFFFFF))
+      (is (= (unpack int64 byte-buffer) -1))))
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
+    (testing "bytes"
+      (is (= (repr (parse (byte-sequence 0) byte-buffer)) ""))
+      (is (= (repr (parse (byte-sequence 1) byte-buffer)) "11"))
+      (is (= (repr (parse (byte-sequence 2) byte-buffer)) "1122")))))
 
 
 (deftest hexify-test
