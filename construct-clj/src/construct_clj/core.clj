@@ -15,7 +15,6 @@
   [& args]
   (println "Hello, World!"))
 
-
 (defn parse
   [spec byte-buffer]
   {:result (apply (:parse spec) [byte-buffer])
@@ -52,6 +51,7 @@
   {:pre [(not (nil? parse))]}
   spec)
 
+;; TODO: maybe don't accept any additional args, to ensure no accidents like:: (uint16 2) instead of (array uint16 2)
 (defn- make-primitive-spec
   [& {:keys [repr static-size dynamic-size parse unpack]}]
   {:pre [(not (nil? parse))
@@ -207,7 +207,9 @@
                          :unpack (fn [parse-results]
                                    (into [] (map unpack (:result parse-results)))))))
 
-;; (defn array-parse-element [parse-result index]) -> (results, element)
+(defn parse-array-index
+  [parse-result index]
+  [parse-result (nth (:result parse-result) index)])
 
 (declare get-struct-index-offset)
 (declare get-struct-size)
@@ -339,5 +341,21 @@
         unpack-result (unpack field-result)]
     [parse-result unpack-result]))
 
-;; (defn parse-in [parse-result field-name]) -> (new-parse-result, element)
-;; (defn unpack-in [parse-result field-name]) -> (new-parse-result, element)
+(defn parse-in
+  [parse-result fields]
+  (if (= 0 (count fields))
+    ;; support empty lists -> return itself.
+    [parse-result parse-result]
+    (cond
+      (keyword? (first fields))
+      (let [[parse-result field-result] (parse-struct-field parse-result (first fields))]
+        (if (= 1 (count fields))
+          [parse-result field-result]
+          ;; TODO: cache results
+          (parse-in field-result (rest fields))))
+      (number? (first fields))
+      (let [[parse-result field-result] (parse-array-index parse-result (first fields))]
+        (if (= 1 (count fields))
+          [parse-result field-result]
+          ;; TODO: cache results
+          (parse-in field-result (rest fields)))))))

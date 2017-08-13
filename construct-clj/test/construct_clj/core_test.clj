@@ -70,7 +70,8 @@
     (testing "array"
       (is (= (unpack (parse (array uint32 2) byte-buffer)) [0x11223344 0x55667788]))
       (is (= (unpack (parse (array uint16 4) byte-buffer)) [0x1122 0x3344 0x5566 0x7788]))
-      (is (= (unpack (parse (array uint8 8) byte-buffer)) [0x11 0x22 0x33 0x44 0x55 0x66 0x77 0x88])))
+      (is (= (unpack (parse (array uint8 8) byte-buffer)) [0x11 0x22 0x33 0x44 0x55 0x66 0x77 0x88]))
+      (is (= (unpack (second (parse-array-index (parse (array uint8 8) byte-buffer) 2))) 0x33)))
     (testing "nested array"
       (is (= (unpack (parse (array (array uint8 4) 2) byte-buffer)) [[0x11 0x22 0x33 0x44] [0x55 0x66 0x77 0x88]])))))
 
@@ -128,3 +129,34 @@
                                        :b (struct [:m uint8 :n uint16])])
                               byte-buffer))
                {:a {:x 0x11 :y 0x2233} :b {:m 0x44 :n 0x5566}}))))))
+
+(deftest parse-in-test
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)
+        nested (struct [:a (struct [:x uint8 :y uint16])
+                        :b (struct [:m uint8 :n uint16])])
+        arrays (array (array uint8 4) 2)
+        mixed (struct [:a (array uint8 4) :b (array uint16 2)])]
+    (testing "nested structs"
+       (let [r (parse nested byte-buffer)]
+          (is (= (unpack (second (parse-in r [:a :x]))) 0x11))
+          (is (= (unpack (second (parse-in r [:a :y]))) 0x2233))
+          (is (= (unpack (second (parse-in r [:b :m]))) 0x44))
+          (is (= (unpack (second (parse-in r [:b :n]))) 0x5566))
+          (is (= (unpack (second (parse-in r [:a]))) {:x 0x11 :y 0x2233}))
+          (is (= (unpack (second (parse-in r [:b]))) {:m 0x44 :n 0x5566}))
+          (is (= (unpack (second (parse-in r []))) {:a {:x 0x11 :y 0x2233} :b {:m 0x44 :n 0x5566}}))))
+    (testing "arrays"
+       (let [r (parse arrays byte-buffer)]
+          (is (= (unpack (second (parse-in r [0 0]))) 0x11))
+          (is (= (unpack (second (parse-in r [0 1]))) 0x22))
+          (is (= (unpack (second (parse-in r [0 3]))) 0x44))
+          (is (= (unpack (second (parse-in r [1 0]))) 0x55))
+          (is (= (unpack (second (parse-in r [1 1]))) 0x66))
+          (is (= (unpack (second (parse-in r [1 3]))) 0x88))))
+    (testing "mixed struct and arrays"
+       (let [r (parse mixed byte-buffer)]
+          (is (= (unpack (second (parse-in r [:a 0]))) 0x11))
+          (is (= (unpack (second (parse-in r [:a 1]))) 0x22))
+          (is (= (unpack (second (parse-in r [:a 3]))) 0x44))
+          (is (= (unpack (second (parse-in r [:b 0]))) 0x5566))
+          (is (= (unpack (second (parse-in r [:b 1]))) 0x7788))))))
