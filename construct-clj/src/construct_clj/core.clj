@@ -154,11 +154,13 @@
       (partition 2 hex))))
 
 (defn byte-buffer->byte-array
-  ([byte-buffer count]
+  ([byte-buffer offset count]
    ;; java bytes are signed, so we have to keep them signed here.
-   (byte-array (map #(byte (read-int8 byte-buffer %)) (range count))))
+   (byte-array (map #(byte (read-int8 byte-buffer %)) (range offset (+ offset count)))))
+  ([byte-buffer count]
+   (byte-buffer->byte-array byte-buffer 0 count))
   ([byte-buffer]
-   (byte-buffer->byte-array byte-buffer (.limit byte-buffer))))
+   (byte-buffer->byte-array byte-buffer 0 (.limit byte-buffer))))
 
 (defn slice-byte-buffer
   ([byte-buffer start end]
@@ -191,6 +193,23 @@
                        :parse (fn byte-seq-parse
                                 ([byte-buffer offset] (slice-byte-buffer byte-buffer offset (+ offset count)))
                                 ([byte-buffer] (slice-byte-buffer byte-buffer 0 count)))))
+
+
+
+(defn encoded-string
+  "encoded-sring maps to the native type `string`."
+  [encoding count]
+  (make-primitive-spec :static-size count
+                       :repr str
+                       :parse (fn encoded-string-parse
+                                ([byte-buffer offset]
+                                 (String. (byte-buffer->byte-array byte-buffer offset count) encoding))
+                                ([byte-buffer]
+                                 (String. (byte-buffer->byte-array byte-buffer count) encoding)))))
+
+(def utf-8 (partial encoded-string "UTF-8"))
+
+(def ascii (partial encoded-string "ASCII"))
 
 (defn array
   [spec count]
@@ -354,15 +373,19 @@
     ;; support empty lists -> return itself.
     [parse-result parse-result]
     (cond
+      ;; reaching into a struct
       (keyword? (first fields))
       (let [[parse-result field-result] (parse-struct-field parse-result (first fields))]
         (if (= 1 (count fields))
           [parse-result field-result]
           ;; TODO: cache results
           (parse-in field-result (rest fields))))
+      ;; reaching into an array
       (number? (first fields))
       (let [[parse-result field-result] (parse-array-index parse-result (first fields))]
         (if (= 1 (count fields))
           [parse-result field-result]
           ;; TODO: cache results
-          (parse-in field-result (rest fields)))))))
+          (parse-in field-result (rest fields))))
+      :else
+      (throw (Exception. "unexpected field type")))))

@@ -73,7 +73,11 @@
       (is (= (unpack (parse (array uint8 8) byte-buffer)) [0x11 0x22 0x33 0x44 0x55 0x66 0x77 0x88]))
       (is (= (unpack (second (parse-array-index (parse (array uint8 8) byte-buffer) 2))) 0x33)))
     (testing "nested array"
-      (is (= (unpack (parse (array (array uint8 4) 2) byte-buffer)) [[0x11 0x22 0x33 0x44] [0x55 0x66 0x77 0x88]])))))
+      (is (= (unpack (parse (array (array uint8 4) 2) byte-buffer)) [[0x11 0x22 0x33 0x44] [0x55 0x66 0x77 0x88]])))
+    (testing "ascii"
+      (let [byte-buffer (uint64->byte-buffer 0x4142434445464748)]
+        (is (= (unpack (parse (ascii 8) byte-buffer)) "ABCDEFGH"))
+        (is (= (unpack (parse (utf-8 8) byte-buffer)) "ABCDEFGH"))))))
 
 (deftest hexify-test
   (let [bytes (byte-array 0x10)]
