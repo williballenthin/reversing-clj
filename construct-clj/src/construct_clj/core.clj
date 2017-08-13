@@ -17,6 +17,7 @@
 
 (defn parse
   [spec byte-buffer]
+  ;; TODO: pass spec into the parse routine.
   {:result (apply (:parse spec) [byte-buffer])
    :spec spec})
 
@@ -24,9 +25,11 @@
   [parsed-results]
   (let [spec (:spec parsed-results)]
     (if (some? (:unpack spec))
+      ;; TODO: pass spec into the unpack routine.
       (apply (:unpack spec) [parsed-results])
       (:result parsed-results))))
 
+;; TODO: is repr required? why not just:: (str (unpack (parse foo buf)))
 (defn repr
   [instance]
   (apply (:repr (:spec instance)) [(:result instance)]))
@@ -181,7 +184,7 @@
 
 (defn byte-sequence
   "byte-sequence maps to the native type `ByteBuffer`."
-  ;; TODO: move to its own module and refer to using namespace.
+  ;; TODO: move to its own module and refer to using namespace. then we can call this `bytes`?
   [count]
   (make-primitive-spec :static-size count
                        :repr repr-bytes
@@ -194,21 +197,23 @@
   (when (nil? (:static-size spec))
     (throw (Exception. "arrays with elements of dynamic size are not yet supported")))
   (let [size (* count (:static-size spec))]
-    (make-primitive-spec :static-size size
-                         :repr #(str "[ " (clojure.string/join ", " (map repr %)) " ]")
-                         ;; TODO: parse lazily.
-                         :parse (fn array-parse
-                                 ([byte-buffer offset]
-                                  (into [] (for [i (range count)]
-                                             (let [element-offset (+ offset (* i (:static-size spec)))
-                                                   element-buffer (slice-byte-buffer byte-buffer element-offset)]
-                                               (parse spec element-buffer)))))
-                                 ([byte-buffer] (array-parse byte-buffer 0)))
-                         :unpack (fn [parse-results]
-                                   (into [] (map unpack (:result parse-results)))))))
+    (make-spec :is-array true
+               :static-size size
+               :repr #(str "[ " (clojure.string/join ", " (map repr %)) " ]")
+               ;; TODO: parse lazily.
+               :parse (fn array-parse
+                        ([byte-buffer offset]
+                         (into [] (for [i (range count)]
+                                    (let [element-offset (+ offset (* i (:static-size spec)))
+                                          element-buffer (slice-byte-buffer byte-buffer element-offset)]
+                                      (parse spec element-buffer)))))
+                        ([byte-buffer] (array-parse byte-buffer 0)))
+               :unpack (fn [parse-results]
+                         (into [] (map unpack (:result parse-results)))))))
 
 (defn parse-array-index
   [parse-result index]
+  {:pre [(get-in parse-result [:spec :is-array])]}
   [parse-result (nth (:result parse-result) index)])
 
 (declare get-struct-index-offset)
@@ -223,8 +228,10 @@
              :dynamic-size dynamic-size
              :parse (fn struct-parse [byte-buffer]
                       (let [field-pairs (partition 2 fields)
+                            ;; TODO: this is static, move into the spec
                             indexes-by-name (into {} (map-indexed (fn [idx field-name] [field-name idx])
                                                                   (map first field-pairs))) ;; query by field name
+                            ;; TODO: don't create these objects until accessed?
                             field-meta (into [] (map #(hash-map :name (first %)
                                                                 :spec (second %)
                                                                 ;; TODO: don't include these up front
