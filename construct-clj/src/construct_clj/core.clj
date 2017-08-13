@@ -1,5 +1,14 @@
 (ns construct-clj.core
+  (:import (java.nio ByteBuffer ByteOrder))
   (:gen-class))
+
+(defn- uint64->byte-buffer
+  [integer]
+  (let [byte-buffer (ByteBuffer/allocate 8)]
+    (.order byte-buffer ByteOrder/BIG_ENDIAN)
+    (.putLong byte-buffer 0 integer)
+    byte-buffer))
+
 
 (defn -main
   "I don't do a whole lot ... yet."
@@ -9,18 +18,12 @@
 
 (defn parse
   [spec byte-buffer]
-  (if (:primitive? spec)
-    {:result (apply (:parse spec) [byte-buffer])
-     :spec spec}
-    ;; TODO
-    (throw (Exception. (str "parse not implemented on non-primitive specs")))))
+  {:result (apply (:parse spec) [byte-buffer])
+   :spec spec})
 
 (defn unpack
   [parsed-results]
   (let [spec (:spec parsed-results)]
-    (when (not (:primitive? spec))
-      ;; TODO
-      (throw (Exception. "unpack not implemented on non-primitive specs")))
     (if (some? (:unpack spec))
       (apply (:unpack spec) [parsed-results])
       (:result parsed-results))))
@@ -29,22 +32,25 @@
   [instance]
   (apply (:repr (:spec instance)) [(:result instance)]))
 
+(declare get-struct-size)
+
+(defn size
+  [parsed-results]
+  (let [spec (:spec parsed-results)]
+    (cond
+      (some? (:static-size spec)) (:static-size spec)
+      (some? (:is-struct spec)) (second (get-struct-size parsed-results))
+      :else (throw (Exception. "don't know how to compute size")))))
 
 ;; spec:
 ;; {
 ;;   :static-size optional-integer
 ;;   :dynamic-size optional-function: (fn [byte-buffer]->integer)
 
-(defn struct
-  ;; will need to compute static-size if all fields are static
-  ;;  or dynamic-size, if all fields are either static or dynamic
-  [])
-
 (defn make-spec
-  [base-spec & {:keys [repr static-size dynamic-size]}]
-  {:repr repr
-   :static-size static-size
-   :dynamic-size dynamic-size})
+  [& {:keys [repr static-size dynamic-size parse unpack] :as spec}]
+  {:pre [(not (nil? parse))]}
+  spec)
 
 (defn- make-primitive-spec
   [& {:keys [repr static-size dynamic-size parse unpack]}]
@@ -183,7 +189,6 @@
                                 ([byte-buffer offset] (slice-byte-buffer byte-buffer offset (+ offset count)))
                                 ([byte-buffer] (slice-byte-buffer byte-buffer 0 count)))))
 
-
 (defn array
   [spec count]
   (when (nil? (:static-size spec))
@@ -191,6 +196,7 @@
   (let [size (* count (:static-size spec))]
     (make-primitive-spec :static-size size
                          :repr #(str "[ " (clojure.string/join ", " (map repr %)) " ]")
+                         ;; TODO: parse lazily.
                          :parse (fn array-parse
                                  ([byte-buffer offset]
                                   (into [] (for [i (range count)]
@@ -198,39 +204,140 @@
                                                    element-buffer (slice-byte-buffer byte-buffer element-offset)]
                                                (parse spec element-buffer)))))
                                  ([byte-buffer] (array-parse byte-buffer 0)))
-                         :unpack (fn [unpack-results]
-                                   (into [] (map unpack (:result unpack-results)))))))
+                         :unpack (fn [parse-results]
+                                   (into [] (map unpack (:result parse-results)))))))
 
-;; instance:
-;; {
-;;   :spec ...
-;;   :fully-parsed? bool
-;;   :parsed-size integer
-;; }
+;; (defn array-parse-element [parse-result index]) -> (results, element)
+
+(declare get-struct-index-offset)
+(declare get-struct-size)
+(declare parse-struct-index)
+
+(defn struct
+  [fields & {:keys [repr static-size dynamic-size]}]
+  (make-spec :is-struct true
+             :repr repr
+             :static-size static-size
+             :dynamic-size dynamic-size
+             :parse (fn struct-parse [byte-buffer]
+                      (let [field-pairs (partition 2 fields)
+                            indexes-by-name (into {} (map-indexed (fn [idx field-name] [field-name idx])
+                                                                  (map first field-pairs))) ;; query by field name
+                            field-meta (into [] (map #(hash-map :name (first %)
+                                                                :spec (second %)
+                                                                ;; TODO: don't include these up front
+                                                                :results nil
+                                                                :offset nil
+                                                                :size nil)
+                                                     field-pairs))]
+                        {:indexes indexes-by-name    ;; from name to index
+                         :fields field-meta          ;; from index to metadata
+                         :byte-buffer byte-buffer}))
+             :unpack (fn struct-unpack [parse-result]
+                       (loop [parse-result parse-result
+                              ret {}
+                              i 0]
+                         (if (= i (count (:fields (:result parse-result))))
+                           ret  ;; unfortunately, we throw away the parse-result
+                           (let [[parse-result field-result] (parse-struct-index parse-result i)
+                                 field (get-in parse-result [:result :fields i])]
+                             (recur parse-result
+                                    (assoc ret (:name field) (unpack field-result))
+                                    (inc i))))))))
 
 
-(defn- get-instance-semiparsed-length
-  "Get the total length of an instance that has been partially, but not fully, parsed."
-  ;; TODO: !!!
-  [byte-buffer instance])
+(defn get-struct-field-index
+  [parse-result field-name]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [spec (:spec parse-result)
+        field-index (get-in parse-result [:result :indexes field-name])]
+    field-index))
 
-(defn get-instance-parsed-length
-  "Get the total length of an instance."
-  [instance]
-  (cond
-    ;; simplest case: this thing has a fixed size.
-    (some? (:static-size (:spec instance))) (:static-size (:spec instance))
-    ;; common case: the instance is already fully parsed, so pull the parsed size.
-    (:fully-parsed? instance) (:parsed-length instance)
-    :else (get-instance-semiparsed-length instance)))
+;; TODO: define exactly what a spec looks like if it's not an array/struct.
+;; how does it define its size, once parsed?
 
-(defn get-spec-parsed-length
-  "Get the total length of a spec parsed at the given byte buffer."
-  [spec byte-buffer]
-  (cond
-    ;; simplest case: this thing has a fixed size.
-    (some? (:static-size spec)) (:static-size spec)
-    ;; complex case: need to parse some fields to compute the total size.
-    (some? (:dynamic-size spec)) (apply (:dynamic-size spec) [byte-buffer])
-    ;; worst case: we have to instantiate and parse the whole thing to fetch length.
-    :else (get-instance-parsed-length (parse spec byte-buffer))))
+(defn get-struct-index-size
+  [parse-result field-index]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field-result (get-in parse-result [:result :fields field-index])
+        field-spec (:spec field-result)]
+    (cond
+      ;; simple, static case.
+      (some? (:static-size field-spec)) [parse-result (:static-size field-spec)]
+      ;; cached from previous calculation.
+      (:size field-result) [parse-result (:size field-result)]
+      ;; need to do some parsing ourselves.
+      (some? (:dynamic-size field-spec)) (let [[parse-result field-offset] (get-struct-index-offset parse-result field-index)
+                                               element-buffer (slice-byte-buffer (:byte-buffer (:result parse-result)) field-offset)
+                                               element-size (apply (:dynamic-size field-spec) [element-buffer])]
+                                           ;; TODO: cache results
+                                           [parse-result element-size])
+      :else  (let [[parse-result field-offset] (get-struct-index-offset parse-result field-index)
+                   element-buffer (slice-byte-buffer (:byte-buffer (:result parse-result)) field-offset)
+                   element (parse field-spec element-buffer)
+                   ;; HACK: assume this is a struct! other cases should be handled above. until we have user specs.
+                   [element element-size] (get-struct-size element)]
+               ;; TODO: cache results
+               [parse-result element-size]))))
+
+(defn get-struct-size
+  [parse-result]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [last-index (dec (count (:fields (:result parse-result))))
+        [parse-result last-offset] (get-struct-index-offset parse-result last-index)
+        [parse-result last-size] (get-struct-index-size parse-result last-index)]
+        ;; TODO: cache results
+    [parse-result (+ last-offset last-size)]))
+
+(defn get-struct-index-offset
+  [parse-result field-index]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field-result (get-in parse-result [:result :fields field-index])]
+    (cond
+      (some? (:offset field-result)) [parse-result (:offset field-result)]
+      (= 0 field-index) [parse-result 0]
+      :else (let [[parse-result last-offset] (get-struct-index-offset parse-result (dec field-index))
+                  [parse-result last-size] (get-struct-index-size parse-result (dec field-index))]
+              ;; TODO: update parse-result to cache this thing
+              [parse-result (+ last-offset last-size)]))))
+
+(defn get-struct-field-offset
+  [parse-result field-name]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field-index (get-struct-field-index parse-result field-name)]
+    (get-struct-index-offset parse-result field-index)))
+
+(defn get-struct-field-size
+  [parse-result field-name]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field-index (get-struct-field-index parse-result field-name)]
+    (get-struct-index-size parse-result field-index)))
+
+(defn parse-struct-index
+  [parse-result field-index]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field (get-in parse-result [:result :fields field-index])]
+    (if (some? (:result field))
+      [parse-result field]
+      (let [field-spec (:spec field)
+            [parse-result field-offset] (get-struct-index-offset parse-result field-index)
+            element-buffer (slice-byte-buffer (:byte-buffer (:result parse-result)) field-offset)
+            element (parse field-spec element-buffer)]
+         ;; TODO: cache results
+         [parse-result element]))))
+
+(defn parse-struct-field
+  [parse-result field-name]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [field-index (get-struct-field-index parse-result field-name)]
+    (parse-struct-index parse-result field-index)))
+
+(defn unpack-struct-field
+  [parse-result field-name]
+  {:pre [(get-in parse-result [:spec :is-struct])]}
+  (let [[parse-result field-result] (parse-struct-field parse-result field-name)
+        unpack-result (unpack field-result)]
+    [parse-result unpack-result]))
+
+;; (defn parse-in [parse-result field-name]) -> (new-parse-result, element)
+;; (defn unpack-in [parse-result field-name]) -> (new-parse-result, element)

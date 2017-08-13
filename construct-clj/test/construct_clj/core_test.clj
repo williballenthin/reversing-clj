@@ -3,16 +3,6 @@
             [construct-clj.core :refer :all])
   (:import (java.nio ByteBuffer ByteOrder)))
 
-(deftest primitive-size-test
-  (testing "numbers"
-    (is (= (get-spec-parsed-length uint8 nil) 1))
-    (is (= (get-spec-parsed-length int8 nil) 1))
-    (is (= (get-spec-parsed-length uint16 nil) 2))
-    (is (= (get-spec-parsed-length int16 nil) 2))
-    (is (= (get-spec-parsed-length uint32 nil) 4))
-    (is (= (get-spec-parsed-length int32 nil) 4))
-    (is (= (get-spec-parsed-length uint64 nil) 8))
-    (is (= (get-spec-parsed-length int64 nil) 8))))
 
 (defn uint32->byte-buffer
   [integer]
@@ -27,6 +17,29 @@
     (.order byte-buffer ByteOrder/BIG_ENDIAN)
     (.putLong byte-buffer 0 integer)
     byte-buffer))
+
+(deftest size-test
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
+    (testing "numbers"
+      (is (= (size (parse uint8 byte-buffer)) 1))
+      (is (= (size (parse int8 byte-buffer)) 1))
+      (is (= (size (parse uint16 byte-buffer)) 2))
+      (is (= (size (parse int16 byte-buffer)) 2))
+      (is (= (size (parse uint32 byte-buffer)) 4))
+      (is (= (size (parse int32 byte-buffer)) 4))
+      (is (= (size (parse uint64 byte-buffer)) 8))
+      (is (= (size (parse int64 byte-buffer)) 8)))
+    (testing "array"
+      (is (= (size (parse (array uint8 2) byte-buffer)) 2))
+      (is (= (size (parse (array uint16 2) byte-buffer)) 4))
+      (is (= (size (parse (array uint32 2) byte-buffer)) 8))
+      (is (= (size (parse (array (array uint8 2) 2) byte-buffer)) 4)))
+    (testing "struct"
+      (is (= (size (parse (struct [:a uint8 :b uint16 :c uint32]) byte-buffer)) 7))
+      (is (= (size (parse (struct [:a (struct [:x uint8 :y uint16])
+                                   :b (struct [:m uint8 :n uint16])])
+                          byte-buffer))
+             6)))))
 
 (deftest primitive-parse-test
   (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
@@ -83,6 +96,35 @@
     (let [byte-buffer (uint32->byte-buffer 0x11223344)]
       (is (= (repr-bytes byte-buffer) "11223344")))))
 
-(let [byte-buffer (uint64->byte-buffer 0x1122334455667788)]
-  ;;(repr (parse (array uint8 4) byte-buffer))
-  (parse (array uint8 4) byte-buffer))
+(deftest struct-parse-test
+  (let [byte-buffer (uint64->byte-buffer 0x1122334455667788)
+        spec (struct [:a uint8
+                      :b uint16
+                      :c uint32])]
+    (testing "struct field indexes"
+      (let [parse-result (parse spec byte-buffer)]
+        (is (= (get-struct-field-index parse-result :a) 0))
+        (is (= (get-struct-field-index parse-result :b) 1))
+        (is (= (get-struct-field-index parse-result :c) 2))))
+    (testing "struct field sizes"
+      (let [parse-result (parse spec byte-buffer)]
+        (is (= (second (get-struct-index-size parse-result 0)) 1))
+        (is (= (second (get-struct-index-size parse-result 1)) 2))
+        (is (= (second (get-struct-index-size parse-result 2)) 4))))
+    (testing "struct offsets"
+      (let [parse-result (parse spec byte-buffer)]
+        (is (= (second (get-struct-field-offset parse-result :a)) 0))
+        (is (= (second (get-struct-field-offset parse-result :b)) 1))
+        (is (= (second (get-struct-field-offset parse-result :c)) 3))))
+    (testing "unpack fields"
+      (let [parse-result (parse spec byte-buffer)]
+        (is (= (second (unpack-struct-field parse-result :a)) 0x11))
+        (is (= (second (unpack-struct-field parse-result :b)) 0x2233))
+        (is (= (second (unpack-struct-field parse-result :c)) 0x44556677))))
+    (testing "unpack struct"
+      (let [parse-result (parse spec byte-buffer)]
+        (is (= (unpack parse-result) {:a 0x11 :b 0x2233 :c 0x44556677}))
+        (is (= (unpack (parse (struct [:a (struct [:x uint8 :y uint16])
+                                       :b (struct [:m uint8 :n uint16])])
+                              byte-buffer))
+               {:a {:x 0x11 :y 0x2233} :b {:m 0x44 :n 0x5566}}))))))
