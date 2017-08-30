@@ -185,10 +185,15 @@
   (let [section-header (get-in pe [:section-headers section-name])
         start (:PointerToRawData section-header)
         length (:SizeOfRawData section-header)
-        end (+ start length)]
-    ;; TODO: allocate VirtualSize buffer and copy from the map
-    (prn (format "0x%x %x %x" start length end))
-    (slice-byte-buffer (:byte-buffer pe) start end)))
+        end (+ start length)
+        ;; this may have size <= length,
+        raw-buf (slice-byte-buffer (:byte-buffer pe) start end)
+        ;; so allocate a new buffer,
+        out-buf (ByteBuffer/allocate length)]
+    ;; and place the raw data into it.
+    (.put out-buf raw-buf)
+    (.position out-buf 0)
+    out-buf))
 
 
 (defn map-file
