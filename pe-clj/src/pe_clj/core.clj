@@ -7,7 +7,7 @@
   (:import (java.nio.channels FileChannel FileChannel$MapMode)))
 
 
-(defn slice-byte-buffer
+(defn slice
   ([byte-buffer start end]
    (let [p (.position byte-buffer)]
      ;; TODO: would be nice to have a with-position macro
@@ -21,7 +21,7 @@
          (.limit slice slice-size))
        slice)))
   ([byte-buffer start]
-   (slice-byte-buffer byte-buffer start (.limit byte-buffer))))
+   (slice byte-buffer start (.limit byte-buffer))))
 
 
 (defn spec-size
@@ -33,7 +33,7 @@
   ([spec byte-buffer]
    (buffy/decompose (buffy/compose-buffer spec :orig-buffer byte-buffer)))
   ([spec byte-buffer offset]
-   (unpack spec (slice-byte-buffer byte-buffer offset))))
+   (unpack spec (slice byte-buffer offset))))
 
 
 (def image-dos-header-spec
@@ -116,7 +116,7 @@
    (into [] (for [i (range count)]
               (unpack data-directory-spec byte-buffer (* i 8)))))
   ([byte-buffer offset count]
-   (unpack-data-directories (slice-byte-buffer byte-buffer offset) count)))
+   (unpack-data-directories (slice byte-buffer offset) count)))
 
 
 (def image-section-header-spec
@@ -145,7 +145,7 @@
              (for [i (range count)]
                 (unpack image-section-header-spec byte-buffer (* i section-header-size))))))
   ([byte-buffer offset count]
-   (unpack-image-section-headers (slice-byte-buffer byte-buffer offset) count)))
+   (unpack-image-section-headers (slice byte-buffer offset) count)))
 
 
 (defn parse-pe
@@ -184,16 +184,28 @@
   [pe section-name]
   (let [section-header (get-in pe [:section-headers section-name])
         start (:PointerToRawData section-header)
+        ;; TODO: we should possibly align this value.
         length (:SizeOfRawData section-header)
         end (+ start length)
         ;; this may have size <= length,
-        raw-buf (slice-byte-buffer (:byte-buffer pe) start end)
+        raw-buf (slice (:byte-buffer pe) start end)
         ;; so allocate a new buffer,
         out-buf (ByteBuffer/allocate length)]
     ;; and place the raw data into it.
     (.put out-buf raw-buf)
     (.position out-buf 0)
     out-buf))
+
+
+(defn rva->va
+  [pe rva]
+  (+ rva (get-in pe [:nt-header :optiona-header :ImageBase])))
+
+
+;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
+;; TODO: get-exports [pe] -> ((ordinal name rva) ...)
+;; TODO: get-resources [pe] -> ???
+;; TODO: get-relocated-section-data [pe section-name base-address=default] -> ByteBuffer
 
 
 (defn map-file
