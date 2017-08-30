@@ -9,7 +9,8 @@
 (deftest dos-header-test
   (testing "the header"
     (let [pe (read-pe kern32)]
-      pe)))
+      (is (= 0x5A4D (get-in pe [:dos-header :e_magic])))
+      (is (= 0xF0   (get-in pe [:dos-header :e_lfanew]))))))
 
 
 
