@@ -63,7 +63,21 @@
     (testing "export"
       (is (= 0x623 (:NumberOfFunctions (parse-directory pe :export))))
       (is (= 0x623 (:NumberOfNames (parse-directory pe :export))))
-      (is (= 0x531185b7 (:TimeDateStamp (parse-directory pe :export)))))))
+      (is (= 0x531185b7 (:TimeDateStamp (parse-directory pe :export))))
+      (is (= "KERNEL32.dll" (:Name (parse-directory pe :export)))))))
+
+
+(deftest exports-test
+  (let [pe (read-pe kern32)
+        exports (get-exports pe)]
+    (testing "export"
+      (is (= 2 (get-in exports [0 :ordinal])))
+      (is (= "AcquireSRWLockExclusive" (get-in exports [0 :name])))
+      (is (= true (get-in exports [0 :forwarded?])))
+      (is (= "NTDLL.RtlAcquireSRWLockExclusive" (get-in exports [0 :forwarded-symbol])))
+      (is (= 4 (get-in exports [2 :ordinal])))
+      (is (= "AcquireStateLock" (get-in exports [2 :name])))
+      (is (= false (get-in exports [2 :forwarded?]))))))
 
 
 

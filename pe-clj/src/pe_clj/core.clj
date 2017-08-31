@@ -2,10 +2,16 @@
   (:gen-class)
   (:require [clojurewerkz.buffy.core :refer :all :as buffy]
             [clojurewerkz.buffy.types :as t]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [pe-clj.macros :refer :all])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode)))
+
+
+(defn hex
+  [i]
+  (format "%X" i))
 
 
 (defn slice
@@ -23,6 +29,25 @@
        slice)))
   ([byte-buffer start]
    (slice byte-buffer start (.limit byte-buffer))))
+
+
+(defn read-ascii
+  "
+  read an ascii string from the given byte buffer at the given offset.
+  "
+  ([byte-buffer]
+   ;; since we `.get`, then lets make sure to restore the position.
+   (with-position byte-buffer 0x0
+     (loop [c (.get byte-buffer)
+            s []]
+       ;; `.get` returns bytes, which are signed.
+       ;; ascii is 7-bit, so the top bit should not be set, aka, should not be negative.
+       (if (<= c 0x0)
+         (apply str (map char (byte-array s)))
+         (recur (.get byte-buffer)
+                (conj s c))))))
+  ([byte-buffer offset]
+   (read-ascii (slice byte-buffer offset))))
 
 
 (defn spec-size
@@ -238,22 +263,29 @@
 
 
 (defn- get-header-data
-  [pe rva length]
-  (when (>= (+ rva length)
-            (get-in pe [:nt-header :optional-header :SizeOfHeaders]))
-    (throw (Exception. "overrun header")))
-  (slice (:byte-buffer pe) rva (+ rva length)))
+  ([pe rva length]
+   (when (>= (+ rva length)
+             (get-in pe [:nt-header :optional-header :SizeOfHeaders]))
+     (throw (Exception. "overrun header")))
+   (slice (:byte-buffer pe) rva (+ rva length)))
+  ([pe rva]
+   (slice (:byte-buffer pe) rva)))
 
 
 (defn- get-section-data
-  [pe section rva length]
-  (when (>= (+ rva length)
-            (+ (:VirtualAddress section) (:VirtualSize section)))
-    (throw (Exception. "overrun section")))
-  ;; TODO: handle reads from virtual data. just use `get-section` when appropriate.
-  (let [offset-section (- rva (:VirtualAddress section))
-        offset-file (+ offset-section (:PointerToRawData section))]
-    (slice (:byte-buffer pe) offset-file (+ offset-file length))))
+  ([pe section rva length]
+   (when (>= (+ rva length)
+             (+ (:VirtualAddress section) (:VirtualSize section)))
+     (throw (Exception. "overrun section")))
+   ;; TODO: handle reads from virtual data. just use `get-section` when appropriate.
+   (let [offset-section (- rva (:VirtualAddress section))
+         offset-file (+ offset-section (:PointerToRawData section))]
+     (slice (:byte-buffer pe) offset-file (+ offset-file length))))
+  ([pe section rva]
+   ;; TODO: handle reads from virtual data. just use `get-section` when appropriate.
+   (let [offset-section (- rva (:VirtualAddress section))
+         offset-file (+ offset-section (:PointerToRawData section))]
+     (slice (:byte-buffer pe) offset-file))))
 
 
 (defn get-data
@@ -261,12 +293,27 @@
   read data from the PE file from the given relative address.
   all the data must be found within the header, or within a single section.
   "
-  [pe rva length]
-  (if (is-in-header pe rva)
-    (get-header-data pe rva length)
-    (if-let [section (find-containing-section pe rva)]
-      (get-section-data pe section rva length)
-      (throw (Exception. "unknown region")))))
+  ([pe rva length]
+   (if (is-in-header pe rva)
+     (get-header-data pe rva length)
+     (if-let [section (find-containing-section pe rva)]
+       (get-section-data pe section rva length)
+       (throw (Exception. "unknown region")))))
+  ([pe rva]
+   (if (is-in-header pe rva)
+     (get-header-data pe rva)
+     (if-let [section (find-containing-section pe rva)]
+       (get-section-data pe section rva)
+       (throw (Exception. "unknown region"))))))
+
+
+(defn get-ascii
+  ([pe rva max-length]
+   (let [buf (get-data pe rva max-length)]
+     (read-ascii buf)))
+  ([pe rva]
+   (let [buf (get-data pe rva)]
+     (read-ascii buf))))
 
 
 (def ^:const image-export-directory-spec
@@ -274,21 +321,24 @@
               :TimeDateStamp (t/uint32-type)
               :MajorVersion (t/ushort-type)
               :MinorVersion (t/ushort-type)
-              :Name (t/uint32-type)
+              :AddressOfName (t/uint32-type)
               :Base (t/uint32-type)
               :NumberOfFunctions (t/uint32-type)
               :NumberOfNames (t/uint32-type)
               :AddressOfFunctions (t/uint32-type)
               :AddressOfNames (t/uint32-type)
-              :AddressOfNameOrdinals (t/uint32-type)))
+              :AddressOfOrdinals (t/uint32-type)))
 
 
 (def ^:const directory-descriptions {:export {:index IMAGE_DIRECTORY_ENTRY_EXPORT
                                               :spec image-export-directory-spec}})
 
 
-(defn parse-directory
+(defn- parse-basic-directory
   "
+  parse the basic directory structure.
+  does not resolve strings, etc.
+
   Args:
     pe: from parse-pe
     directory (keyword): from DIRECTORIES.
@@ -301,15 +351,80 @@
     parsed-directory))
 
 
+(defmulti parse-directory
+  (fn [pe directory]
+    directory))
+
+
+
+(defmethod parse-directory :export
+  [pe directory]
+  (let [dir (parse-basic-directory pe :export)
+        name-buf (get-data pe (:AddressOfName dir) 64)  ;; 64 is an arbitrary max name length
+        name (read-ascii name-buf)]
+    (merge dir {:Name name})))
+
+
+(defmethod parse-directory :default
+  [pe directory]
+  (let [dir (parse-basic-directory pe directory)]
+    dir))
+
+
+(defn table-spec
+  [type count]
+  (buffy/spec :entries (t/repeated-type type count)))
+
+
+(defn get-export-tables
+  [pe]
+  (let [export-directory (parse-directory pe :export)
+        table-size (* 4 (:NumberOfNames export-directory))
+        uint32-table-spec (table-spec (t/uint32-type) (:NumberOfNames export-directory))
+        short-table-spec (table-spec (t/ushort-type) (:NumberOfNames export-directory))
+        functions-table-buf (get-data pe (:AddressOfFunctions export-directory) table-size)
+        functions-table (unpack uint32-table-spec functions-table-buf)
+        names-table-buf (get-data pe (:AddressOfNames export-directory) table-size)
+        names-table (unpack uint32-table-spec names-table-buf)
+        ordinals-table-buf (get-data pe (:AddressOfOrdinals export-directory) table-size)
+        ordinals-table (unpack short-table-spec ordinals-table-buf)]
+    {:functions functions-table
+     :names names-table
+     :ordinals ordinals-table}))
+
+
+(defn- forwarded?
+  [pe export-rva]
+  (let [export-loc (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_EXPORT])]
+    (and (>= export-rva (:rva export-loc))
+         (< export-rva (+ (:rva export-loc) (:size export-loc))))))
+
+
+(defn get-export
+  [pe tables i]
+  (let [export-loc (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_EXPORT])
+        ordinal (get-in tables [:ordinals :entries i])
+        name-rva (get-in tables [:names :entries i])
+        fn-rva (get-in tables [:functions :entries ordinal])]
+    (if (forwarded? pe fn-rva)
+       {:ordinal ordinal
+        :name (when (not (zero? name-rva)) (get-ascii pe name-rva))
+        :forwarded? true
+        :forwarded-symbol (get-ascii pe fn-rva)}
+       {:ordinal ordinal
+        :name (when (not (zero? name-rva)) (get-ascii pe name-rva))
+        :forwarded? false
+        :function-address fn-rva})))
+
+
 (defn get-exports
   [pe]
-  (let [export-data-directory (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_EXPORT])
-        export-directory-buf (get-data pe (:rva export-data-directory) (:size export-data-directory))
-        export-directory (unpack image-export-directory-spec export-directory-buf)]))
+  (let [tables (get-export-tables pe)]
+    (into [] (for [i (range (count (get-in tables [:ordinals :entries])))]
+               (get-export pe tables i)))))
 
 
 ;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
-;; TODO: get-exports [pe] -> ((ordinal name rva) ...)
 ;; TODO: get-resources [pe] -> ???
 ;; TODO: get-relocated-section-data [pe section-name base-address=default] -> ByteBuffer
 
