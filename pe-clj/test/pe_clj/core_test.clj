@@ -61,7 +61,9 @@
 (deftest data-directory-test
   (let [pe (read-pe kern32)]
     (testing "export"
-      (is (=))
+      (is (= 0x623 (:NumberOfFunctions (parse-directory pe :export))))
+      (is (= 0x623 (:NumberOfNames (parse-directory pe :export))))
+      (is (= 0x531185b7 (:TimeDateStamp (parse-directory pe :export)))))))
 
 
 

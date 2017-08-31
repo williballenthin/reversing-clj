@@ -272,8 +272,8 @@
 (def image-export-directory-spec
   (buffy/spec :Characteristics (t/uint32-type)
               :TimeDateStamp (t/uint32-type)
-              :MajorVersion (t/uint32-type)
-              :MinorVersion (t/uint32-type)
+              :MajorVersion (t/ushort-type)
+              :MinorVersion (t/ushort-type)
               :Name (t/uint32-type)
               :Base (t/uint32-type)
               :NumberOfFunctions (t/uint32-type)
