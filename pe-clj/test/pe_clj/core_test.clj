@@ -69,7 +69,7 @@
 
 (deftest exports-test
   (let [pe (read-pe kern32)
-        exports (get-exports pe)]
+        exports (into [] (get-exports pe))]
     (testing "export"
       (is (= 2 (get-in exports [0 :ordinal])))
       (is (= "AcquireSRWLockExclusive" (get-in exports [0 :name])))

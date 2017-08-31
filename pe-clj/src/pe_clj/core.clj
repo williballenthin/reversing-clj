@@ -400,7 +400,7 @@
          (< export-rva (+ (:rva export-loc) (:size export-loc))))))
 
 
-(defn get-export
+(defn- get-export
   [pe tables i]
   (let [export-loc (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_EXPORT])
         ordinal (get-in tables [:ordinals :entries i])
@@ -420,8 +420,8 @@
 (defn get-exports
   [pe]
   (let [tables (get-export-tables pe)]
-    (into [] (for [i (range (count (get-in tables [:ordinals :entries])))]
-               (get-export pe tables i)))))
+    (for [i (range (count (get-in tables [:ordinals :entries])))]
+      (get-export pe tables i))))
 
 
 ;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
