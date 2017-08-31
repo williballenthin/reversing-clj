@@ -37,7 +37,7 @@
    (unpack spec (slice byte-buffer offset))))
 
 
-(def image-dos-header-spec
+(def ^:const image-dos-header-spec
   (buffy/spec :e_magic (t/ushort-type)  ;; "MZ"  0x5A4D
               :e_cblp (t/ushort-type)
               :e_cp (t/ushort-type)
@@ -58,13 +58,13 @@
               :e_res (t/repeated-type (t/ushort-type) 10)
               :e_lfanew (t/uint32-type)))
 
-(def signature-spec
+(def ^:const signature-spec
   (buffy/spec :Signature (t/uint32-type)))  ;; "PE"
 
 
 (def ^:const IMAGE_FILE_MACHINE_I386 0x14C)
 
-(def image-file-header-spec
+(def ^:const image-file-header-spec
   (buffy/spec :Machine (t/ushort-type)
               :NumberOfSections (t/ushort-type)
               :TimeDateStamp (t/uint32-type)
@@ -75,7 +75,7 @@
 
 (def ^:const IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x10B)
 
-(def optional-header-spec
+(def ^:const optional-header-spec
   (buffy/spec :Magic (t/ushort-type)
               :MajorLinkerVersion (t/ubyte-type)
               :MinorLinkerVersion (t/ubyte-type)
@@ -127,7 +127,7 @@
 (def ^:const IMAGE_DIRECTORY_ENTRY_RESERVED 15)
 
 
-(def data-directory-spec
+(def ^:const data-directory-spec
   (buffy/spec :rva (t/uint32-type)
               :size (t/uint32-type)))
 
@@ -140,7 +140,7 @@
    (unpack-data-directories (slice byte-buffer offset) count)))
 
 
-(def image-section-header-spec
+(def ^:const image-section-header-spec
   (buffy/spec :Name (t/string-type 8)
               :VirtualSize (t/uint32-type)
               :VirtualAddress (t/uint32-type)
@@ -269,7 +269,7 @@
       (throw (Exception. "unknown region")))))
 
 
-(def image-export-directory-spec
+(def ^:const image-export-directory-spec
   (buffy/spec :Characteristics (t/uint32-type)
               :TimeDateStamp (t/uint32-type)
               :MajorVersion (t/ushort-type)
@@ -283,8 +283,8 @@
               :AddressOfNameOrdinals (t/uint32-type)))
 
 
-(def ^:const DIRECTORIES {:export {:index IMAGE_DIRECTORY_ENTRY_EXPORT
-                                   :spec image-export-directory-spec}})
+(def ^:const directory-descriptions {:export {:index IMAGE_DIRECTORY_ENTRY_EXPORT
+                                              :spec image-export-directory-spec}})
 
 
 (defn parse-directory
@@ -294,7 +294,7 @@
     directory (keyword): from DIRECTORIES.
   "
   [pe directory]
-  (let [dir (get DIRECTORIES directory)
+  (let [dir (get directory-descriptions directory)
         data-directory (get-in pe [:nt-header :optional-header :data-directories (:index dir)])
         directory-buf (get-data pe (:rva data-directory) (:size data-directory))
         parsed-directory (unpack (:spec dir) directory-buf)]
