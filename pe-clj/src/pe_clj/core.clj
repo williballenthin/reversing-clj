@@ -1,7 +1,8 @@
 (ns pe-clj.core
   (:gen-class)
   (:require [clojurewerkz.buffy.core :refer :all :as buffy]
-            [clojurewerkz.buffy.types :as t])
+            [clojurewerkz.buffy.types :as t]
+            [clojure.java.io :as io])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode)))
@@ -60,7 +61,8 @@
 (def signature-spec
   (buffy/spec :Signature (t/uint32-type)))  ;; "PE"
 
-(def IMAGE_FILE_MACHINE_I386 0x14C)
+
+(def ^:const IMAGE_FILE_MACHINE_I386 0x14C)
 
 (def image-file-header-spec
   (buffy/spec :Machine (t/ushort-type)
@@ -71,7 +73,7 @@
               :SizeOfOptionalHeader (t/ushort-type)
               :Characteristics (t/ushort-type)))
 
-(def IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x10B)
+(def ^:const IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x10B)
 
 (def optional-header-spec
   (buffy/spec :Magic (t/ushort-type)
@@ -104,6 +106,25 @@
               :SizeOfHeapCommit (t/uint32-type)
               :LoaderFlags (t/uint32-type)
               :NumberOfRvaAndSizes (t/uint32-type)))
+
+
+(def ^:const IMAGE_DIRECTORY_ENTRY_EXPORT 0)
+(def ^:const IMAGE_DIRECTORY_ENTRY_IMPORT 1)
+(def ^:const IMAGE_DIRECTORY_ENTRY_RESOURCE 2)
+(def ^:const IMAGE_DIRECTORY_ENTRY_EXCEPTION 3)
+(def ^:const IMAGE_DIRECTORY_ENTRY_SECURITY 4)
+(def ^:const IMAGE_DIRECTORY_ENTRY_BASERELOC 5)
+(def ^:const IMAGE_DIRECTORY_ENTRY_DEBUG 6)
+;; Architecture on non-x86 platforms
+(def ^:const IMAGE_DIRECTORY_ENTRY_COPYRIGHT 7)
+(def ^:const IMAGE_DIRECTORY_ENTRY_GLOBALPTR 8)
+(def ^:const IMAGE_DIRECTORY_ENTRY_TLS 9)
+(def ^:const IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG 10)
+(def ^:const IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT 11)
+(def ^:const IMAGE_DIRECTORY_ENTRY_IAT 12)
+(def ^:const IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT 13)
+(def ^:const IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR 14)
+(def ^:const IMAGE_DIRECTORY_ENTRY_RESERVED 15)
 
 
 (def data-directory-spec
@@ -199,7 +220,7 @@
 
 (defn rva->va
   [pe rva]
-  (+ rva (get-in pe [:nt-header :optiona-header :ImageBase])))
+  (+ rva (get-in pe [:nt-header :optional-header :ImageBase])))
 
 
 (defn- find-containing-section
@@ -236,12 +257,55 @@
 
 
 (defn get-data
+  "
+  read data from the PE file from the given relative address.
+  all the data must be found within the header, or within a single section.
+  "
   [pe rva length]
   (if (is-in-header pe rva)
     (get-header-data pe rva length)
     (if-let [section (find-containing-section pe rva)]
       (get-section-data pe section rva length)
       (throw (Exception. "unknown region")))))
+
+
+(def image-export-directory-spec
+  (buffy/spec :Characteristics (t/uint32-type)
+              :TimeDateStamp (t/uint32-type)
+              :MajorVersion (t/uint32-type)
+              :MinorVersion (t/uint32-type)
+              :Name (t/uint32-type)
+              :Base (t/uint32-type)
+              :NumberOfFunctions (t/uint32-type)
+              :NumberOfNames (t/uint32-type)
+              :AddressOfFunctions (t/uint32-type)
+              :AddressOfNames (t/uint32-type)
+              :AddressOfNameOrdinals (t/uint32-type)))
+
+
+(def ^:const DIRECTORIES {:export {:index IMAGE_DIRECTORY_ENTRY_EXPORT
+                                   :spec image-export-directory-spec}})
+
+
+(defn parse-directory
+  "
+  Args:
+    pe: from parse-pe
+    directory (keyword): from DIRECTORIES.
+  "
+  [pe directory]
+  (let [dir (get DIRECTORIES directory)
+        data-directory (get-in pe [:nt-header :optional-header :data-directories (:index dir)])
+        directory-buf (get-data pe (:rva data-directory) (:size data-directory))
+        parsed-directory (unpack (:spec dir) directory-buf)]
+    parsed-directory))
+
+
+(defn get-exports
+  [pe]
+  (let [export-data-directory (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_EXPORT])
+        export-directory-buf (get-data pe (:rva export-data-directory) (:size export-data-directory))
+        export-directory (unpack image-export-directory-spec export-directory-buf)]))
 
 
 ;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
@@ -263,3 +327,10 @@
 (defn read-pe
   [path]
   (parse-pe (map-file path)))
+
+
+(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
+(def kern32' (io/file fixtures' "kernel32.dll"))
+
+(let [pe (read-pe kern32')]
+  (:Name (find-containing-section pe 0xe7000)))

@@ -58,6 +58,12 @@
       (is (= 0x10 (bit-and 0xFF (.get (get-data pe 0xe8001 1))))))))  ;; in .reloc section
 
 
+(deftest data-directory-test
+  (let [pe (read-pe kern32)]
+    (testing "export"
+      (is (=))
+
+
 
 (let [pe (read-pe kern32)]
   (get-in pe [:section-headers]))
