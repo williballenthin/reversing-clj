@@ -64,7 +64,11 @@
       (is (= 0x623 (:NumberOfFunctions (parse-directory pe :export))))
       (is (= 0x623 (:NumberOfNames (parse-directory pe :export))))
       (is (= 0x531185b7 (:TimeDateStamp (parse-directory pe :export))))
-      (is (= "KERNEL32.dll" (:Name (parse-directory pe :export)))))))
+      (is (= "KERNEL32.dll" (:Name (parse-directory pe :export)))))
+    (testing "import"
+      (is (= 0x531185b7 (:TimeDateStamp (parse-directory pe :import))))
+      (is (= 0xFFFFFFFF (:ForwarderChain (parse-directory pe :import))))
+      (is (= "api-ms-win-core-rtlsupport-l1-2-0.dll" (:Name (parse-directory pe :import)))))))
 
 
 (deftest exports-test
@@ -80,6 +84,11 @@
       (is (= false (get-in exports [2 :forwarded?]))))))
 
 
+(defn update-values
+  [m f & args]
+  (reduce (fn [r [k v]] (assoc r k (apply f v args))) {} m))
+
 
 (let [pe (read-pe kern32)]
-  (get-in pe [:section-headers]))
+  ;;(update-values (parse-directory pe :import) hex))
+  (parse-directory pe :import))

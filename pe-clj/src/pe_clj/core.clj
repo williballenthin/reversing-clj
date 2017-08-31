@@ -330,8 +330,18 @@
               :AddressOfOrdinals (t/uint32-type)))
 
 
+(def ^:const image-import-directory-spec
+  (buffy/spec :OriginalFirstThunk (t/uint32-type)
+              :TimeDateStamp (t/uint32-type)
+              :ForwarderChain (t/uint32-type)
+              :AddressOfName (t/uint32-type)
+              :FirstThunk (t/uint32-type)))
+
+
 (def ^:const directory-descriptions {:export {:index IMAGE_DIRECTORY_ENTRY_EXPORT
-                                              :spec image-export-directory-spec}})
+                                              :spec image-export-directory-spec}
+                                     :import {:index IMAGE_DIRECTORY_ENTRY_IMPORT
+                                              :spec image-import-directory-spec}})
 
 
 (defn- parse-basic-directory
@@ -356,13 +366,17 @@
     directory))
 
 
-
 (defmethod parse-directory :export
   [pe directory]
-  (let [dir (parse-basic-directory pe :export)
-        name-buf (get-data pe (:AddressOfName dir) 64)  ;; 64 is an arbitrary max name length
-        name (read-ascii name-buf)]
-    (merge dir {:Name name})))
+  (let [dir (parse-basic-directory pe :export)]
+    (merge dir {:Name (get-ascii pe (:AddressOfName dir))})))
+
+
+(defmethod parse-directory :import
+  [pe directory]
+  (let [dir (parse-basic-directory pe :import)]
+    ;;dir))
+    (merge dir {:Name (get-ascii pe (:AddressOfName dir))})))
 
 
 (defmethod parse-directory :default
@@ -424,6 +438,31 @@
       (get-export pe tables i))))
 
 
+(def empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
+
+
+(defn empty-import-descriptor?
+  [import-descriptor]
+  (zero? (.compareTo import-descriptor empty-import-descriptor)))
+
+
+(defn get-import-descriptors
+  [pe]
+  (loop [offset (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_IMPORT :rva])
+         descriptors []]
+     (let [import-descriptor-buf (get-data pe offset (spec-size image-import-directory-spec))]
+       (if (empty-import-descriptor? import-descriptor-buf)
+         descriptors
+         (let [descriptor (unpack image-import-directory-spec import-descriptor-buf)
+               descriptor' (merge descriptor {:Name (get-ascii pe (:AddressOfName descriptor))})]
+           (recur (+ offset (spec-size image-import-directory-spec))
+                  (conj descriptors descriptor')))))))
+
+
+(defn get-imports
+  [pe])
+
+
 ;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
 ;; TODO: get-resources [pe] -> ???
 ;; TODO: get-relocated-section-data [pe section-name base-address=default] -> ByteBuffer
@@ -448,4 +487,4 @@
 (def kern32' (io/file fixtures' "kernel32.dll"))
 
 (let [pe (read-pe kern32')]
-  (:Name (find-containing-section pe 0xe7000)))
+  (get-import-descriptors pe))
