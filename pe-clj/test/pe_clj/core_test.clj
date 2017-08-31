@@ -35,15 +35,28 @@
 (deftest pe-sections-test
   (let [pe (read-pe kern32)]
     (testing ".text"
-      (is (= 0x90 (bit-and 0xFF (.get (get-section-data pe ".text"))))))
+      (is (= 0x90 (bit-and 0xFF (.get (get-section pe ".text"))))))
     (testing ".data"
-      (is (= 0x00 (bit-and 0xFF (.get (get-section-data pe ".data"))))))
+      (is (= 0x00 (bit-and 0xFF (.get (get-section pe ".data"))))))
     (testing ".idata"
-      (is (= 0x23 (bit-and 0xFF (.get (get-section-data pe ".idata"))))))
+      (is (= 0x23 (bit-and 0xFF (.get (get-section pe ".idata"))))))
     (testing ".rsrc"
-      (is (= 0x00 (bit-and 0xFF (.get (get-section-data pe ".rsrc"))))))
+      (is (= 0x00 (bit-and 0xFF (.get (get-section pe ".rsrc"))))))
     (testing ".reloc"
-      (is (= 0x00 (bit-and 0xFF (.get (get-section-data pe ".reloc"))))))))
+      (is (= 0x00 (bit-and 0xFF (.get (get-section pe ".reloc"))))))))
+
+
+(deftest data-access-test
+  (let [pe (read-pe kern32)]
+    (testing "get-data"
+      (is (= 0x4d (bit-and 0xFF (.get (get-data pe 0x0 1)))))  ;; in header
+      (is (= 0x5a (bit-and 0xFF (.get (get-data pe 0x1 1)))))  ;; in header
+      (is (= 0x90 (bit-and 0xFF (.get (get-data pe 0x1000 1)))))  ;; start of .text section
+      (is (= 0xb1 (bit-and 0xFF (.get (get-data pe 0xdb054 1)))))  ;; in .data section
+      (is (= 0x23 (bit-and 0xFF (.get (get-data pe 0xdc000 1)))))  ;; start of .idata section
+      (is (= 0xa0 (bit-and 0xFF (.get (get-data pe 0xe7010 1)))))  ;; in .rsrc section
+      (is (= 0x10 (bit-and 0xFF (.get (get-data pe 0xe8001 1))))))))  ;; in .reloc section
+
 
 
 (let [pe (read-pe kern32)]

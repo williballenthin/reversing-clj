@@ -180,7 +180,7 @@
      :section-headers section-headers}))
 
 
-(defn get-section-data
+(defn get-section
   [pe section-name]
   (let [section-header (get-in pe [:section-headers section-name])
         start (:PointerToRawData section-header)
@@ -200,6 +200,48 @@
 (defn rva->va
   [pe rva]
   (+ rva (get-in pe [:nt-header :optiona-header :ImageBase])))
+
+
+(defn- find-containing-section
+  [pe rva]
+  (first (filter #(and (>= rva (:VirtualAddress %))
+                       (< rva (+ (:VirtualAddress %)
+                                 (:VirtualSize %))))
+                 (vals (:section-headers pe)))))
+
+
+(defn- is-in-header
+  [pe rva]
+  (and (>= rva 0)
+       (< rva (get-in pe [:nt-header :optional-header :SizeOfHeaders]))))
+
+
+(defn- get-header-data
+  [pe rva length]
+  (when (>= (+ rva length)
+            (get-in pe [:nt-header :optional-header :SizeOfHeaders]))
+    (throw (Exception. "overrun header")))
+  (slice (:byte-buffer pe) rva (+ rva length)))
+
+
+(defn- get-section-data
+  [pe section rva length]
+  (when (>= (+ rva length)
+            (+ (:VirtualAddress section) (:VirtualSize section)))
+    (throw (Exception. "overrun section")))
+  ;; TODO: handle reads from virtual data. just use `get-section` when appropriate.
+  (let [offset-section (- rva (:VirtualAddress section))
+        offset-file (+ offset-section (:PointerToRawData section))]
+    (slice (:byte-buffer pe) offset-file (+ offset-file length))))
+
+
+(defn get-data
+  [pe rva length]
+  (if (is-in-header pe rva)
+    (get-header-data pe rva length)
+    (if-let [section (find-containing-section pe rva)]
+      (get-section-data pe section rva length)
+      (throw (Exception. "unknown region")))))
 
 
 ;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
