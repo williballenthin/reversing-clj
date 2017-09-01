@@ -17,12 +17,10 @@
 
 (defn slice
   ([byte-buffer start end]
-   (let [p (.position byte-buffer)]
-     ;; TODO: would be nice to have a with-position macro
+   (with-position byte-buffer start
      (.position byte-buffer start)
      (let [slice (.slice byte-buffer)
            slice-size (- end start)]
-       (.position byte-buffer p)
        (.order slice (.order byte-buffer))
        ;; if end is greater than the limit, truncate to limit.
        (when (> (.limit slice) slice-size)
@@ -51,19 +49,19 @@
    (read-ascii (slice byte-buffer offset))))
 
 
-(defn spec-size
+(defn- spec-size
   [spec]
   (apply + (map #(.size (second %)) spec)))
 
 
-(defn unpack
+(defn- unpack
   ([spec byte-buffer]
    (buffy/decompose (buffy/compose-buffer spec :orig-buffer byte-buffer)))
   ([spec byte-buffer offset]
    (unpack spec (slice byte-buffer offset))))
 
 
-(def ^:const image-dos-header-spec
+(def ^:const ^:private image-dos-header-spec
   (buffy/spec :e_magic (t/ushort-type)  ;; "MZ"  0x5A4D
               :e_cblp (t/ushort-type)
               :e_cp (t/ushort-type)
@@ -84,13 +82,14 @@
               :e_res (t/repeated-type (t/ushort-type) 10)
               :e_lfanew (t/uint32-type)))
 
-(def ^:const signature-spec
+
+(def ^:const ^:private signature-spec
   (buffy/spec :Signature (t/uint32-type)))  ;; "PE"
 
 
 (def ^:const IMAGE_FILE_MACHINE_I386 0x14C)
 
-(def ^:const image-file-header-spec
+(def ^:const ^:private image-file-header-spec
   (buffy/spec :Machine (t/ushort-type)
               :NumberOfSections (t/ushort-type)
               :TimeDateStamp (t/uint32-type)
@@ -101,7 +100,7 @@
 
 (def ^:const IMAGE_NT_OPTIONAL_HDR32_MAGIC 0x10B)
 
-(def ^:const optional-header-spec
+(def ^:const ^:private optional-header-spec
   (buffy/spec :Magic (t/ushort-type)
               :MajorLinkerVersion (t/ubyte-type)
               :MinorLinkerVersion (t/ubyte-type)
@@ -153,12 +152,12 @@
 (def ^:const IMAGE_DIRECTORY_ENTRY_RESERVED 15)
 
 
-(def ^:const data-directory-spec
+(def ^:const ^:private data-directory-spec
   (buffy/spec :rva (t/uint32-type)
               :size (t/uint32-type)))
 
 
-(defn unpack-data-directories
+(defn- unpack-data-directories
   ([byte-buffer count]
    (into [] (for [i (range count)]
               (unpack data-directory-spec byte-buffer (* i 8)))))
@@ -166,7 +165,7 @@
    (unpack-data-directories (slice byte-buffer offset) count)))
 
 
-(def ^:const image-section-header-spec
+(def ^:const ^:private image-section-header-spec
   (buffy/spec :Name (t/string-type 8)
               :VirtualSize (t/uint32-type)
               :VirtualAddress (t/uint32-type)
@@ -179,7 +178,7 @@
               :Characteristics (t/uint32-type)))
 
 
-(defn unpack-image-section-headers
+(defn- unpack-image-section-headers
   "
   Parse the given number of section headers at the given byte buffer.
   Return a map from section name to parsed section header.
@@ -308,7 +307,7 @@
        (throw (Exception. "unknown region"))))))
 
 
-(defn get-ascii
+(defn- get-ascii
   ([pe rva max-length]
    (let [buf (get-data pe rva max-length)]
      (read-ascii buf)))
@@ -317,7 +316,7 @@
      (read-ascii buf))))
 
 
-(def ^:const image-export-directory-spec
+(def ^:const ^:private image-export-directory-spec
   (buffy/spec :Characteristics (t/uint32-type)
               :TimeDateStamp (t/uint32-type)
               :MajorVersion (t/ushort-type)
@@ -331,7 +330,7 @@
               :AddressOfOrdinals (t/uint32-type)))
 
 
-(def ^:const image-import-directory-spec
+(def ^:const ^:private image-import-directory-spec
   (buffy/spec :OriginalFirstThunk (t/uint32-type)
               :TimeDateStamp (t/uint32-type)
               :ForwarderChain (t/uint32-type)
@@ -386,12 +385,12 @@
     dir))
 
 
-(defn table-spec
+(defn- table-spec
   [type count]
   (buffy/spec :entries (t/repeated-type type count)))
 
 
-(defn get-export-tables
+(defn- get-export-tables
   [pe]
   (let [export-directory (parse-directory pe :export)
         table-size (* 4 (:NumberOfNames export-directory))
@@ -439,7 +438,7 @@
       (get-export pe tables i))))
 
 
-(def the-empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
+(def ^:private the-empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
 
 
 (defn- empty-import-descriptor?
@@ -447,7 +446,7 @@
   (zero? (.compareTo import-descriptor the-empty-import-descriptor)))
 
 
-(defn take-uint32!
+(defn- take-uint32!
   [byte-buffer]
   (bit-and 0xFFFFFFFF (.getInt byte-buffer)))
 
@@ -457,14 +456,13 @@
   (let [buf (get-data pe rva)]
     (loop [ptr (take-uint32! buf)
            thunk-array []]
-      (log/info "blah")
       (if (= 0 ptr)
         thunk-array
         (recur (take-uint32! buf)
                (conj thunk-array ptr))))))
 
 
-(def ^:const image-import-by-name-spec
+(def ^:const ^:private image-import-by-name-spec
   (buffy/spec :Hint (t/ushort-type)))
 
 
@@ -480,7 +478,7 @@
     (merge imp {:Name (read-ascii buf 2)})))
 
 
-(defn get-import-descriptors
+(defn- get-import-descriptors
   [pe]
   (loop [offset (get-in pe [:nt-header :optional-header :data-directories IMAGE_DIRECTORY_ENTRY_IMPORT :rva])
          descriptors []]
@@ -494,6 +492,13 @@
 
 
 (defn get-imports
+  "
+  parse the import directories into a sequence of maps with keys:
+    - :Dll (str)
+    - one of:
+      - :Ordinal (int)
+      - :Name (str)
+  "
   [pe]
   (flatten (for [import-descriptor (get-import-descriptors pe)]
               (for [thunk (get-thunk-array pe (:OriginalFirstThunk import-descriptor))]
@@ -504,7 +509,6 @@
 
 
 ;; TODO: get-resources [pe] -> ???
-;; TODO: get-relocated-section-data [pe section-name base-address=default] -> ByteBuffer
 
 
 (defn map-file
@@ -520,13 +524,3 @@
 (defn read-pe
   [path]
   (parse-pe (map-file path)))
-
-
-(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
-(def kern32' (io/file fixtures' "kernel32.dll"))
-
-(let [pe (read-pe kern32')
-      descs (get-import-descriptors pe)
-      desc (nth descs 0)]
-  (get-thunk-array pe (:OriginalFirstThunk desc))
-  (get-imports pe))

@@ -3,8 +3,10 @@
             [pe-clj.core :refer :all]
             [clojure.java.io :as io]))
 
+
 (def fixtures (.getPath (clojure.java.io/resource "fixtures")))
 (def kern32 (io/file fixtures "kernel32.dll"))
+
 
 (deftest pe-header-test
   (let [pe (read-pe kern32)]
@@ -91,13 +93,3 @@
       (is (= (get-in imports [0 :Name]) "RtlCaptureContext"))
       (is (= (get-in imports [0 :Dll]) "api-ms-win-core-rtlsupport-l1-2-0.dll")))))
       ;; TODO: need tests for import by ordinal
-
-
-(defn update-values
-  [m f & args]
-  (reduce (fn [r [k v]] (assoc r k (apply f v args))) {} m))
-
-
-(let [pe (read-pe kern32)]
-  ;;(update-values (parse-directory pe :import) hex))
-  (parse-directory pe :import))
