@@ -75,13 +75,22 @@
   (let [pe (read-pe kern32)
         exports (into [] (get-exports pe))]
     (testing "export"
-      (is (= 2 (get-in exports [0 :ordinal])))
-      (is (= "AcquireSRWLockExclusive" (get-in exports [0 :name])))
-      (is (= true (get-in exports [0 :forwarded?])))
-      (is (= "NTDLL.RtlAcquireSRWLockExclusive" (get-in exports [0 :forwarded-symbol])))
-      (is (= 4 (get-in exports [2 :ordinal])))
-      (is (= "AcquireStateLock" (get-in exports [2 :name])))
-      (is (= false (get-in exports [2 :forwarded?]))))))
+      (is (= (get-in exports [0 :ordinal]) 2))
+      (is (= (get-in exports [0 :name]) "AcquireSRWLockExclusive"))
+      (is (= (get-in exports [0 :forwarded?]) true))
+      (is (= (get-in exports [0 :forwarded-symbol]) "NTDLL.RtlAcquireSRWLockExclusive"))
+      (is (= (get-in exports [2 :ordinal]) 4))
+      (is (= (get-in exports [2 :name]) "AcquireStateLock"))
+      (is (= (get-in exports [2 :forwarded?]) false)))))
+
+
+(deftest imports-test
+  (let [pe (read-pe kern32)
+        imports (into [] (get-imports pe))]
+    (testing "import"
+      (is (= (get-in imports [0 :Name]) "RtlCaptureContext"))
+      (is (= (get-in imports [0 :Dll]) "api-ms-win-core-rtlsupport-l1-2-0.dll")))))
+      ;; TODO: need tests for import by ordinal
 
 
 (defn update-values

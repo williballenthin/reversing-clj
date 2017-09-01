@@ -3,7 +3,8 @@
   (:require [clojurewerkz.buffy.core :refer :all :as buffy]
             [clojurewerkz.buffy.types :as t]
             [clojure.java.io :as io]
-            [pe-clj.macros :refer :all])
+            [pe-clj.macros :refer :all]
+            [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode)))
@@ -438,12 +439,45 @@
       (get-export pe tables i))))
 
 
-(def empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
+(def the-empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
 
 
-(defn empty-import-descriptor?
+(defn- empty-import-descriptor?
   [import-descriptor]
-  (zero? (.compareTo import-descriptor empty-import-descriptor)))
+  (zero? (.compareTo import-descriptor the-empty-import-descriptor)))
+
+
+(defn take-uint32!
+  [byte-buffer]
+  (bit-and 0xFFFFFFFF (.getInt byte-buffer)))
+
+
+(defn- get-thunk-array
+  [pe rva]
+  (let [buf (get-data pe rva)]
+    (loop [ptr (take-uint32! buf)
+           thunk-array []]
+      (log/info "blah")
+      (if (= 0 ptr)
+        thunk-array
+        (recur (take-uint32! buf)
+               (conj thunk-array ptr))))))
+
+
+(def ^:const image-import-by-name-spec
+  (buffy/spec :Hint (t/ushort-type)))
+
+
+(def ^:const IMAGE_ORDINAL_FLAG 0x80000000)
+(def ^:const IMAGE_ORDINAL_MASK 0xFFFF)
+(def ^:const IMAGE_ORDINAL_FLAG64 0x8000000000000000)
+
+
+(defn- get-import-name
+  [pe rva]
+  (let [buf (get-data pe rva)
+        imp (unpack image-import-by-name-spec buf)]
+    (merge imp {:Name (read-ascii buf 2)})))
 
 
 (defn get-import-descriptors
@@ -460,10 +494,15 @@
 
 
 (defn get-imports
-  [pe])
+  [pe]
+  (flatten (for [import-descriptor (get-import-descriptors pe)]
+              (for [thunk (get-thunk-array pe (:OriginalFirstThunk import-descriptor))]
+                (if (= 0 (bit-and IMAGE_ORDINAL_FLAG thunk))
+                  (merge (get-import-name pe thunk) {:Dll (:Name import-descriptor)})
+                  {:Ordinal (bit-and IMAGE_ORDINAL_MASK thunk)
+                   :Dll (:Name import-descriptor)})))))
 
 
-;; TODO: get-imports [pe] -> ((dll ordinal name rva) ...)
 ;; TODO: get-resources [pe] -> ???
 ;; TODO: get-relocated-section-data [pe section-name base-address=default] -> ByteBuffer
 
@@ -486,5 +525,8 @@
 (def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
 (def kern32' (io/file fixtures' "kernel32.dll"))
 
-(let [pe (read-pe kern32')]
-  (get-import-descriptors pe))
+(let [pe (read-pe kern32')
+      descs (get-import-descriptors pe)
+      desc (nth descs 0)]
+  (get-thunk-array pe (:OriginalFirstThunk desc))
+  (get-imports pe))
