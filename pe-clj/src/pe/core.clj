@@ -1,9 +1,8 @@
-(ns pe-clj.core
+(ns pe.core
   (:gen-class)
   (:require [clojurewerkz.buffy.core :refer :all :as buffy]
-            [clojurewerkz.buffy.types :as t]
-            [clojure.java.io :as io]
-            [pe-clj.macros :refer :all]
+            [clojurewerkz.buffy.types :as t] [clojure.java.io :as io]
+            [pe.macros :refer :all]
             [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
@@ -264,8 +263,8 @@
 
 (defn- get-header-data
   ([pe rva length]
-   (when (>= (+ rva length)
-             (get-in pe [:nt-header :optional-header :SizeOfHeaders]))
+   (when (> (+ rva length)
+            (get-in pe [:nt-header :optional-header :SizeOfHeaders]))
      (throw (Exception. "overrun header")))
    (slice (:byte-buffer pe) rva (+ rva length)))
   ([pe rva]

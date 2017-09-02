@@ -1,6 +1,6 @@
-(ns pe-clj.core-test
+(ns com.williballethin.pe.core-test
   (:require [clojure.test :refer :all]
-            [pe-clj.core :refer :all]
+            [com.williballenthin.pe.core :refer :all]
             [clojure.java.io :as io]))
 
 
