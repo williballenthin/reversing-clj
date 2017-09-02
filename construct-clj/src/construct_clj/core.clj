@@ -1,5 +1,6 @@
 (ns construct-clj.core
   (:import (java.nio ByteBuffer ByteOrder))
+  (:require [clojure.test])
   (:gen-class))
 
 (defn- uint64->byte-buffer
@@ -194,8 +195,6 @@
                                 ([byte-buffer offset] (slice-byte-buffer byte-buffer offset (+ offset count)))
                                 ([byte-buffer] (slice-byte-buffer byte-buffer 0 count)))))
 
-
-
 (defn encoded-string
   "encoded-sring maps to the native type `string`."
   [encoding count]
@@ -206,6 +205,35 @@
                                  (String. (byte-buffer->byte-array byte-buffer offset count) encoding))
                                 ([byte-buffer]
                                  (String. (byte-buffer->byte-array byte-buffer count) encoding)))))
+
+
+
+(defn encoded-string2
+  "encoded-sring maps to the native type `string`.
+
+  Args:
+    encoding (string): the name of the encoding, from Java-land.
+    count (number): number of bytes.
+  "
+  [encoding count]
+  (make-primitive-spec :static-size count
+                       :repr str
+                       :parse (fn encoded-string-parse
+                                ([ctx spec byte-buffer]
+                                 (cond
+                                   (number? (:count spec))
+                                   (String. (byte-buffer->byte-array byte-buffer (:count spec)) (:encoding spec))
+
+                                   (clojure.test/function? (:count spec))
+                                   (let [[ctx count] (apply (:count spec) [ctx spec])]
+                                     (String. (byte-buffer->byte-array byte-buffer count) (:encoding spec)))
+
+                                   (keyword? (:count spec))
+                                   (let [[ctx count-result] (parse-in ctx [(:count spec)])]
+                                     (String. (byte-buffer->byte-array byte-buffer count) (:encoding spec)))
+
+                                   :else
+                                   (throw (Exception. "don't know what to do with count")))))))
 
 (def utf-8 (partial encoded-string "UTF-8"))
 

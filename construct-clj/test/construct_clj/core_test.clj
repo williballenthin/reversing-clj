@@ -164,3 +164,29 @@
           (is (= (unpack (second (parse-in r [:a 3]))) 0x44))
           (is (= (unpack (second (parse-in r [:b 0]))) 0x5566))
           (is (= (unpack (second (parse-in r [:b 1]))) 0x7788))))))
+
+(deftest dynamic-count-test
+  (let [byte-buffer (uint64->byte-buffer 0x03656667FFFFFFFF)]
+    (testing "pstring"
+       (let [pstring (struct [:length uint8
+                              :value (ascii :length)])
+             r (parse pstring byte-buffer)
+             u (unpack r)]
+          (is (= (:length u) 0x3))
+          (is (= (:value u)) "abc")
+          (is (= (size r) 0x4))))
+    (testing "astring"
+      ;; let's define astring as like pstring, except the length field has only 7 useful bits.
+      (let [astring (struct [:length uint8
+                             :value (ascii (fn [ctx spec]
+                                             (let [[ctx length-result] (parse-in ctx [:length])
+                                                   length (bit-and 0x7F (unpack length-result))]
+                                                [ctx (assoc spec :static-size length)])))]
+                            :dynamic-size #(inc (unpack (parse uint8 %)))
+                            :repr #(str (:value (unpack %))))
+            r (parse astring byte-buffer)
+            u (unpack r)]
+        (is (= (:length u) 0x3))
+        (is (= (:value u) "abc"))
+        (is (= (size r) 0x4))
+        (is (= (repr r) "abc"))))))
