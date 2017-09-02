@@ -18,6 +18,7 @@
   ;;                               -DartifactId=capstone.jar
   ;;                               -Dversion=3.5.0-rc3
   ;;                               -Dpackaging=jar
+  ;; via: https://maven.apache.org/guides/mini/guide-3rd-party-jars-local.html
   :main ^:skip-aot capstone-clj.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
