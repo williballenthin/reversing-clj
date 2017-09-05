@@ -40,3 +40,10 @@
 
       (is (= false (indirect-target? (disassemble workspace call-va))))
       (is (= false (indirect-target? (disassemble workspace jnz-va)))))))
+
+
+(deftest rec-dec-test
+  (let [workspace (load-file kern32)]
+    (testing "dis"
+      (is (= 0xCB (count (recursive-descent-disassemble workspace 0x68901000))))
+      (is (= true (contains? (recursive-descent-disassemble workspace 0x68901000) 0x68901010))))))

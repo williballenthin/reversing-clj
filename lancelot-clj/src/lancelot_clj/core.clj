@@ -3,7 +3,8 @@
   (:require [clojure.java.io :as io]
             [pantomime.mime :as panto]
             [pe.core :as pe]
-            [pe.macros :as pe-macros])
+            [pe.macros :as pe-macros]
+            [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode))
@@ -11,8 +12,8 @@
   (:import [capstone.X86_const]))
 
 
-(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
-(def kern32' (io/file fixtures' "kernel32.dll"))
+;;(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
+;;(def kern32' (io/file fixtures' "kernel32.dll"))
 
 (defn hex
   [i]
@@ -23,6 +24,11 @@
   (if (not (nil? e))
     (conj c e)
     c))
+
+
+(defmethod print-method Number
+  [n ^java.io.Writer w]
+  (.write w (format "0x%X" n)))
 
 
 (defn map-file
@@ -211,7 +217,7 @@
 
 
 (defn get-target
-  "assuming the given instruction has a first "
+  "assuming the given instruction has a first operand that is not indirect."
   [insn]
   (let [op (get-op0 insn)]
     (cond
@@ -276,24 +282,129 @@
            [{:address (get-target insn)}])})
 
 
-(let [b (map-file kern32')
-      p (pe/parse-pe b)
-      w (load-file kern32')
-      nop (disassemble w 0x68901000)
-      call (disassemble w 0x68901032)
-      mov (disassemble w 0x68901010)
-      jnz (disassemble w 0x6890102b)]
-  (analyze-instruction w call))
-  ;;(get-target call))
-  ;;(indirect-target? call))
+(defn thunk?
+  [address]
+  (and (map? address)
+       (contains? address :deref)))
 
 
-(defmethod print-method Number
-  [n ^java.io.Writer w]
-  (.write w (format "0x%X" n)))
+(defn recursive-descent-disassemble
+  [workspace va]
+  (loop [insns {}
+         q (conj clojure.lang.PersistentQueue/EMPTY va)]
+    (if-let [va (peek q)]
+      (let [insn (disassemble workspace va)
+            ana (analyze-instruction workspace insn)
+            next-addrs (map :address (:flow ana))
+            new-addrs (filter #(and (not (thunk? %))
+                                    (not (contains? insns %)))
+                              next-addrs)]
+        (recur (assoc insns va ana)
+               (apply conj (pop q) new-addrs)))
+      insns)))
+
+
+(defn with-queue
+  "
+  recursively process in a breadth-first manner, given some seed elements.
+  invokes the given function `f`, which should return the next keys to process and processed value.
+  results are assoc'd into a map using these keys and processed values.
+  skips keys that have already been encountered.
+
+  python::
+
+      m = {}
+      while q:
+        k = q.pop(0)
+        next, v = f(k)
+        m[k] = v
+        q.append(*next)
+      return m
+  "
+  ([f init-entries m]
+   (loop [m m
+          q (apply conj clojure.lang.PersistentQueue/EMPTY init-entries)]
+     (if-let [i (peek q)]
+       (if (contains? m i)
+         (recur m (pop q))
+         (let [[next r] (f i)]
+           (recur (assoc m i r)
+                  (apply conj (pop q) next))))
+       m)))
+  ([f init-entries]
+   (with-queue f init-entries {})))
+
+
+(defn recursive-descent-disassemble
+  [workspace va]
+  (with-queue (fn [va]
+                (let [insn (disassemble workspace va)
+                      ana (analyze-instruction workspace insn)
+                      next-addrs (map :address (:flow ana))
+                      new-addrs (filter #(not (thunk? %)) next-addrs)]
+                  [new-addrs ana]))
+              [va]))
+
+
+(defn extract-cref-addresses
+  [insns]
+  (remove thunk? (map :address (flatten (remove nil? (map :cref insns))))))
+
+
+(defn explore-functions
+  [workspace vas]
+  (with-queue (fn [va]
+                (let [insns (recursive-descent-disassemble workspace va)
+                      functions (extract-cref-addresses (vals insns))]
+                  [functions insns]))
+              vas))
+
+
+(defn analyze
+  [workspace])
+  ;; for each entrypoint (in parallel)
+  ;;   recursive-descent-disassemble
+  ;;   extract new functions
+  ;;   repeat upon queue
+  ;;   until queue is empty
+  ;; index functions
+  ;; for each function:
+  ;;   build cfg
+
+
+;; via: https://github.com/danielmiladinov/joy-of-clojure/blob/master/src/joy-of-clojure/chapter5/how_to_use_persistent_queues.clj
+(defmethod print-method clojure.lang.PersistentQueue [q, w]
+
+  (print-method '<- w)
+  (print-method (seq q) w)
+  (print-method '-< w))
+
+
+(defn get-entrypoints
+  [pe]
+  (map #(+ (:function-address %)
+           (get-in pe [:nt-header :optional-header :ImageBase]))
+       (remove :forwarded? (pe/get-exports pe))))
+
+
+;;(let [b (map-file kern32')
+;;      p (pe/parse-pe b)
+;;      w (load-file kern32')
+;;      nop (disassemble w 0x68901000)
+;;      call (disassemble w 0x68901032)
+;;      mov (disassemble w 0x68901010)
+;;      jnz (disassemble w 0x6890102b)]
+;;   (remove thunk? (map :address (flatten (remove nil? (map :cref (vals (recursive-descent-disassemble2 w 0x68901000))))))))
+;;  (keys (explore-functions w (get-entrypoints p))))
 
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (Thread/sleep 5000)
+  (let [b (map-file (first args))
+        p (pe/parse-pe b)
+        w (load-file (first args))
+        fvas (keys (explore-functions w (get-entrypoints p)))]
+    (doseq [fva (sort fvas)]
+      (println (format "0x%x" fva)))))
