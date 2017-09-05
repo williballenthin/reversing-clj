@@ -4,7 +4,8 @@
             [pantomime.mime :as panto]
             [pe.core :as pe]
             [pe.macros :as pe-macros]
-            [clojure.tools.logging :as log])
+            [clojure.tools.logging :as log]
+            [clojure.set :as set])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode))
@@ -12,8 +13,8 @@
   (:import [capstone.X86_const]))
 
 
-;;(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
-;;(def kern32' (io/file fixtures' "kernel32.dll"))
+(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
+(def kern32' (io/file fixtures' "kernel32.dll"))
 
 (defn hex
   [i]
@@ -26,9 +27,15 @@
     c))
 
 
-(defmethod print-method Number
-  [n ^java.io.Writer w]
-  (.write w (format "0x%X" n)))
+(defn assoc-if [m k e]
+  (if (not (nil? e))
+    (assoc m k e)
+    m))
+
+
+;;(defmethod print-method Number
+;;  [n ^java.io.Writer w]
+;;  (.write w (format "0x%X" n)))
 
 
 (defn map-file
@@ -259,7 +266,7 @@
 
 (defn analyze-instruction-flow
   [insn]
-  (-> []
+  (-> #{}
       (conj-if (when (not (or (ret? insn)
                               (jmp? insn)))
                  {:type :fall-through
@@ -276,10 +283,10 @@
 
 (defn analyze-instruction
   [workspace insn]
-  {:flow (analyze-instruction-flow insn)
-   :cref (if (and (call? insn)
-                  (not (indirect-target? insn)))
-           [{:address (get-target insn)}])})
+  (-> {:flow (analyze-instruction-flow insn)}
+      (assoc-if :cref (when (and (call? insn)
+                                 (not (indirect-target? insn)))
+                        #{{:address (get-target insn)}}))))
 
 
 (defn thunk?
@@ -335,14 +342,19 @@
    (with-queue f init-entries {})))
 
 
+(defn step-queue
+  "syntax sugar for `with-queue`"
+  [next value]
+  [next value])
+
+
 (defn recursive-descent-disassemble
   [workspace va]
   (with-queue (fn [va]
                 (let [insn (disassemble workspace va)
                       ana (analyze-instruction workspace insn)
-                      next-addrs (map :address (:flow ana))
-                      new-addrs (filter #(not (thunk? %)) next-addrs)]
-                  [new-addrs ana]))
+                      next-addrs (filter #(not (thunk? %)) (map :address (:flow ana)))]
+                  (step-queue next-addrs ana)))
               [va]))
 
 
@@ -356,28 +368,8 @@
   (with-queue (fn [va]
                 (let [insns (recursive-descent-disassemble workspace va)
                       functions (extract-cref-addresses (vals insns))]
-                  [functions insns]))
+                  (step-queue functions insns)))
               vas))
-
-
-(defn analyze
-  [workspace])
-  ;; for each entrypoint (in parallel)
-  ;;   recursive-descent-disassemble
-  ;;   extract new functions
-  ;;   repeat upon queue
-  ;;   until queue is empty
-  ;; index functions
-  ;; for each function:
-  ;;   build cfg
-
-
-;; via: https://github.com/danielmiladinov/joy-of-clojure/blob/master/src/joy-of-clojure/chapter5/how_to_use_persistent_queues.clj
-(defmethod print-method clojure.lang.PersistentQueue [q, w]
-
-  (print-method '<- w)
-  (print-method (seq q) w)
-  (print-method '-< w))
 
 
 (defn get-entrypoints
@@ -387,15 +379,27 @@
        (remove :forwarded? (pe/get-exports pe))))
 
 
-;;(let [b (map-file kern32')
-;;      p (pe/parse-pe b)
-;;      w (load-file kern32')
-;;      nop (disassemble w 0x68901000)
-;;      call (disassemble w 0x68901032)
-;;      mov (disassemble w 0x68901010)
-;;      jnz (disassemble w 0x6890102b)]
-;;   (remove thunk? (map :address (flatten (remove nil? (map :cref (vals (recursive-descent-disassemble2 w 0x68901000))))))))
-;;  (keys (explore-functions w (get-entrypoints p))))
+(def A)
+
+(defn analyze
+  [workspace]
+  (let [explored-functions (explore-functions workspace (get-entrypoints (:pe workspace)))
+        function-vas (keys explored-functions)]
+    (alter-var-root #'A (constantly explored-functions))
+    {:functions function-vas
+     :instructions (merge (vals explored-functions))
+     :workspace workspace}))
+
+
+(let [b (map-file kern32')
+      p (pe/parse-pe b)
+      w (load-file kern32')
+      nop (disassemble w 0x68901000)
+      call (disassemble w 0x68901032)
+      mov (disassemble w 0x68901010)
+      jnz (disassemble w 0x6890102b)]
+  (let [ana (analyze w)]
+    (count (:instructions ana))))
 
 
 (defn -main
