@@ -14,21 +14,6 @@
   (.write w (format "0x%X" n)))
 
 
-(defn index-by'
-  "
-  create a map indexed by the given key of the given collection.
-  like `group-by`, except its assumed there's only one value per key.
-
-  example::
-
-      (index-by [{:a 1 :b 2} {:a 3 :b 4}] :a)
-      => {1 {:a 1 :b 2}
-          3 {:a 3 :b 4}}
-  "
-  [col k]
-  (into {} (map #(vector (get % k) %) col)))
-
-
 (deftest analysis-test
   (let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
         base-addr 0x0
@@ -193,17 +178,8 @@
                              0xC2 0x10 0x00])  ;; 29 retn    10h                  <<--- ret, no fallthrough
       raw-insns (disassemble-all cs buf base-addr)
       insn-analysis (analyze-instructions raw-insns)
-      {:keys [insns-by-addr flows-by-src flows-by-dst]} insn-analysis
+      {:keys [insns-by-addr
+              flows-by-src
+              flows-by-dst]} insn-analysis
       reachable-addrs (into #{} (find-reachable-addresses insn-analysis 0x0))]
-  ;;(map format-insn (disassemble-all cs buf base-addr)))
-  ;;(read-bb insns-by-addr base-addr))
   (read-basic-block insn-analysis 0x0))
-;;             last-insn (get insns-by-addr (last run))
-;;             flow-addrs (mapv :addr (:flow last-insn))))
-  ;;(:flow (get insns-by-addr 0x18)))
-
-
-
-    ;;(< 1 (count (filter reachable-addrs (map :src (get flows-by-dst addr))))) (conj bb-addrs addr)))
-    ;;(filter reachable-addrs (mapv :src (get flows-by-dst 0x4))))
-

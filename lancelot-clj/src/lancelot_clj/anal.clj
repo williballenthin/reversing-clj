@@ -267,8 +267,9 @@
        (let [q (pop q)
              run (read-fallthrough-sequence insns-by-addr addr)
              seen' (set/union seen (into #{} run))
-             last-insn (get insns-by-addr (last run))
-             flow-addrs (mapv :address (:flow last-insn))]
+             last-insn-addr (last run)
+             last-insn (get insns-by-addr last-insn-addr)
+             flow-addrs (map :address (:flow last-insn))]
          (recur (apply conj q flow-addrs) seen')))
      ;; when work is done, return set of seen addresses.
      seen)))
