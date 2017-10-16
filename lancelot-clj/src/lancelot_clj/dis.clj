@@ -13,18 +13,10 @@
   (:import [capstone.X86_const]))
 
 
-(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
-(def kern32' (io/file fixtures' "kernel32.dll"))
-
-(defn hex
-  [i]
-  (format "%X" i))
-
-
 (defn disassemble-one
   "
   disassemble a single instruction from the given bytes at the given offset.
-  
+
   example::
 
       > (disassemble-one cs (get-section pe '.text') 0x401000 0x0)
@@ -40,13 +32,13 @@
      (first (.disasm dis arr rva 1))))
   ([dis buf rva]
    (disassemble-one dis buf rva 0x0)))
-  
+
 
 (defn disassemble-all
   "
   disassemble instructions at all offsets in the given bytes.
   note, this includes overlapping instructions.
-  
+
   example::
 
       > (disassemble-all cs (get-section pe '.text') 0x401000)
