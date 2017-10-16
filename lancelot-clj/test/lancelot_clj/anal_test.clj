@@ -73,8 +73,8 @@
       (let [raw-insns (disassemble-all cs buf base-addr)
             insns (into [] (map analyze-instruction raw-insns))
             insns-by-addr (index-by insns :address)
-            flows-by-src (group-by :src (flows insns))
-            flows-by-dst (group-by :dst (flows insns))]
+            flows-by-src (group-by :src (compute-instruction-flows insns))
+            flows-by-dst (group-by :dst (compute-instruction-flows insns))]
         ;; this is the initial `push ebp` instruction.
         ;; just a single flow: fallthrough to next insn.
         (is (= (:flow (get insns-by-addr base-addr))
@@ -103,11 +103,10 @@
         (is (= 2 (count (get flows-by-dst 0x16))))))
     (testing "fallthrough-sequence-analysis"
       (let [raw-insns (disassemble-all cs buf base-addr)
-            insns (into [] (map analyze-instruction raw-insns))
-            insns-by-addr (index-by insns :address)]
+            insn-analysis (analyze-instructions raw-insns)]
         ;; this is the "basic block" from the entry (+0x0) until the jz (+0x18).
         ;; ends with a conditional jump.
-        (let [bb0 (into #{} (read-fallthrough-sequence insns-by-addr 0x0))]
+        (let [bb0 (into #{} (read-fallthrough-sequence insn-analysis 0x0))]
           ;; first two instructions are in the basic block.
           (is (= true (contains? bb0 0x0)))
           (is (= true (contains? bb0 0x1)))
@@ -122,7 +121,7 @@
           (is (= false (contains? bb0 0x1A))))
         ;; this is the "basic block" from the `xor` (+0x1A) until the `jmp` (+0x22).
         ;; ends with an unconditional jump (non-fallthrough instruction).
-        (let [bb1 (into #{} (read-fallthrough-sequence insns-by-addr 0x1A))]
+        (let [bb1 (into #{} (read-fallthrough-sequence insn-analysis 0x1A))]
           ;; the xor at +0x1A
           (is (= true (contains? bb1 0x1A)))
           (is (= false (contains? bb1 0x19)))
@@ -133,7 +132,7 @@
           (is (= false (contains? bb1 0x24))))
         ;; this is the "basic block" from the `pop esi` (+0x24) until the `ret` (+0x29).
         ;; ends with an instruction with no successors.
-        (let [bb2 (into #{} (read-fallthrough-sequence insns-by-addr 0x24))]
+        (let [bb2 (into #{} (read-fallthrough-sequence insn-analysis 0x24))]
           ;; the `pop esi` at +0x24
           (is (= true (contains? bb2 0x24)))
           (is (= false (contains? bb2 0x23)))
@@ -142,27 +141,25 @@
           (is (= false (contains? bb2 0x2A))))))
     (testing "reachable-instruction-analysis"
       (let [raw-insns (disassemble-all cs buf base-addr)
-            insns (into [] (map analyze-instruction raw-insns))
-            insns-by-addr (index-by insns :address)
-            reachable-insns (find-reachable-addresses insns-by-addr 0x0)]
-        (is (= reachable-insns [0x0 0x1 0x3 0x4 0x5
-                                0x6 0x7 0xA 0xD 0x10
-                                0x13 0x16 0x18 0x1a
-                                0x1c 0x1e 0x21 0x22
-                                0x24 0x25 0x26 0x27
-                                0x28 0x29]))))
+            insn-analysis (analyze-instructions raw-insns)
+            reachable-insns (find-reachable-addresses insn-analysis 0x0)]
+        (is (= reachable-insns #{0x0 0x1 0x3 0x4 0x5
+                                 0x6 0x7 0xA 0xD 0x10
+                                 0x13 0x16 0x18 0x1a
+                                 0x1c 0x1e 0x21 0x22
+                                 0x24 0x25 0x26 0x27
+                                 0x28 0x29}))))
     (testing "bb-analysis"
       (let [raw-insns (disassemble-all cs buf base-addr)
-            insns (into [] (map analyze-instruction raw-insns))
-            insns-by-addr (index-by insns :address)]
-        (is (= (read-basic-block insns-by-addr 0x0)
+            insn-analysis (analyze-instructions raw-insns)]
+        (is (= (read-basic-block insn-analysis 0x0)
                ;; all instructions before `test ecx, ecx` at 0x16.
                [0x0 0x1 0x3 0x4 0x5 0x6 0x7 0xA 0xD 0x10 0x13]))
-        (is (= (read-basic-block insns-by-addr 0x16)
+        (is (= (read-basic-block insn-analysis 0x16)
                [0x16 0x18]))
-        (is (= (read-basic-block insns-by-addr 0x1A)
+        (is (= (read-basic-block insn-analysis 0x1A)
                [0x1a 0x1c 0x1e 0x21 0x22]))
-        (is (= (read-basic-block insns-by-addr 0x24)
+        (is (= (read-basic-block insn-analysis 0x24)
                [0x24 0x25 0x26 0x27 0x28 0x29]))))))
 
 
@@ -194,15 +191,13 @@
                              0x58              ;; 27 pop     eax
                              0xC9              ;; 28 leave
                              0xC2 0x10 0x00])  ;; 29 retn    10h                  <<--- ret, no fallthrough
-      insns (into [] (map analyze-instruction (disassemble-all cs buf base-addr)))
-      insns-by-addr (index-by insns :address)
-      fl (into [] (flows insns))
-      flows-by-src (group-by :src fl)
-      flows-by-dst (group-by :dst fl)
-      reachable-addrs (into #{} (find-reachable-addresses insns-by-addr 0x0))]
+      raw-insns (disassemble-all cs buf base-addr)
+      insn-analysis (analyze-instructions raw-insns)
+      {:keys [insns-by-addr flows-by-src flows-by-dst]} insn-analysis
+      reachable-addrs (into #{} (find-reachable-addresses insn-analysis 0x0))]
   ;;(map format-insn (disassemble-all cs buf base-addr)))
   ;;(read-bb insns-by-addr base-addr))
-  (read-basic-block insns-by-addr 0x0))
+  (read-basic-block insn-analysis 0x0))
 ;;             last-insn (get insns-by-addr (last run))
 ;;             flow-addrs (mapv :addr (:flow last-insn))))
   ;;(:flow (get insns-by-addr 0x18)))
