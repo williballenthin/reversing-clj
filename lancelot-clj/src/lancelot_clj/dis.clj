@@ -47,5 +47,9 @@
       < ...
   "
   [dis buf rva]
-  (map #(disassemble-one dis buf (+ rva %) %) (range (dec (.limit buf)))))
+  (for [offset (range (dec (.limit buf)))]
+    (let [insn (disassemble-one dis buf (+ rva offset) offset)]
+      (when (nil? insn)
+        (log/info "failed to disassemble: 0x%x" (+ rva offset)))
+      insn)))
 
