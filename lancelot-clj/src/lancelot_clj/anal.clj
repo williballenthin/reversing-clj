@@ -5,6 +5,21 @@
   (:import [capstone.X86_const]))
 
 
+(defn index-by
+  "
+  create a map indexed by the given key of the given collection.
+  like `group-by`, except its assumed there's only one value per key.
+
+  example::
+
+      (index-by [{:a 1 :b 2} {:a 3 :b 4}] :a)
+      => {1 {:a 1 :b 2}
+          3 {:a 3 :b 4}}
+  "
+  [col k]
+  (into {} (map #(vector (get % k) %) col)))
+
+
 (defn conj-if [c e]
   (if (not (nil? e))
     (conj c e)
@@ -170,8 +185,135 @@
       (assoc :address (.address insn))))
 
 
+(defn flows
+  "
+  flows are the paths from a source instruction to successor instructions.
+
+  Returns:
+    lazy sequence of maps with keys:
+      - :src - the source address.
+      - :dst - the destination address.
+      - :type - the flow type (:fall-through, :jmp, :cjmp)
+  "
+  [insns]
+  (flatten (for [insn insns]
+             (for [flow (:flow insn)]
+               {:src (:address insn)
+                :dst (:address flow)
+                :type (:type flow)}))))
+
+
+;; TODO: will rename this.
+(defn make-cfg
+  "
+  Returns:
+    map: with keys:
+      - :roots - set of addresses that have no flows to them.
+      - :leaves - set of addresses that have no flows from them.
+  "
+  [insns]
+  (let [fs (into (list) (flows insns))
+        flows-by-src (group-by :src fs)
+        flows-by-dst (group-by :dst fs)]
+     ;; roots are instructions that have no flows to them.
+    {:roots (into #{} (remove nil? (for [insn insns]
+                                     (let [addr (:address insn)]
+                                       (when (nil? (get flows-by-dst addr))
+                                         addr)))))
+     ;; leaves are instructions that have no flow from them.
+     :leaves (into #{} (remove nil? (for [insn insns]
+                                      (let [addr (:address insn)]
+                                        (when (nil? (get flows-by-src addr))
+                                          addr)))))}))
+
+
+(defn read-fallthrough-sequence
+  "
+  collect a sequence of instruction addresses from the given address that look sorta like a basic block.
+  that is, they simply fall through from one to another.
+  note, this routine cannot determine when an otherwise contiguous basic block is split by the target of a jump.
+  "
+  [insns-by-addr start-addr]
+  (loop [bb-addrs []
+         addr start-addr]
+    (let [insn (get insns-by-addr addr)]
+      (cond
+        ;; no successors, this must be last insn.
+        (= 0 (count (:flow insn))) (conj bb-addrs addr)
+        ;; multiple successors, this must be a cjmp, so this is end of bb.
+        (< 1 (count (:flow insn))) (conj bb-addrs addr)
+        ;; single successor, but not fallthrough, so its a jmp, and this is end of bb.
+        (not (= :fall-through (:type (first (:flow insn))))) (conj bb-addrs addr)
+        :else (recur (conj bb-addrs addr)
+                     (:address (first (:flow insn))))))))
+
+
+(defn find-reachable-addresses
+  "
+  collect the set of instruction addresses that are reachable by following forward flows from the given address.
+  "
+  [insns-by-addr start-addr]
+  ;; make queue of addresses to explore.
+  ;; pop address.
+  ;; read fallthrough sequence.
+  ;; update seen addrs.
+  ;; find next addrs to explore.
+  ;; if seen, break.
+  ;; else, push to queue.
+  ;; repeat until queue empty.
+  (loop [q (conj clojure.lang.PersistentQueue/EMPTY start-addr)
+         seen #{}]
+   (if-let [addr (peek q)]
+     (if (contains? seen addr)
+       ;; if already processed, keep going
+       (recur (pop q) seen)
+
+       ;; else, read the sequence of fallthrough instructions and update seen set.
+       (let [q (pop q)
+             run (read-fallthrough-sequence insns-by-addr addr)
+             seen' (set/union seen run)
+             last-insn (get insns-by-addr (last run))
+             flow-addrs (mapv :address (:flow last-insn))]
+         (recur (apply conj q flow-addrs) seen')))
+     ;; when work is done, return set of seen addresses.
+     seen)))
+
+
+(defn read-basic-block
+  "
+  collect the instruction addresses of the basic block from the given address.
+  if the given address is not the start of a basic block, the behavior is undefined.
+  "
+  ([insns-by-addr start-addr reachable-addrs]
+   {:pre [(map? insns-by-addr)
+          (set? reachable-addrs)
+          (number? start-addr)]}
+   (let [fl (into [] (flows (vals insns-by-addr)))
+         flows-by-src (group-by :src fl)
+         flows-by-dst (group-by :dst fl)]
+     (loop [bb-addrs []
+            addr start-addr]
+       (let [insn (get insns-by-addr addr)]
+         (cond
+           ;; no successors, this must be last insn.
+           (= 0 (count (:flow insn))) (conj bb-addrs addr)
+           ;; multiple successors, this must be a cjmp, so this is end of bb.
+           (< 1 (count (:flow insn))) (conj bb-addrs addr)
+           ;; single successor, but not fallthrough, so its a jmp, and this is end of bb.
+           (not (= :fall-through (:type (first (:flow insn))))) (conj bb-addrs addr)
+           ;; there is more than one relevant xref to this insn.
+           ;; TODO: if addr == start-addr, then there should be none?
+           ;; note: the current addr is *not* part of the basic block. its one past the end.
+           (< 1 (count (filter reachable-addrs (map :src (get flows-by-dst addr))))) bb-addrs
+           ;; otherwise, keep scanning forward
+           :else (recur (conj bb-addrs addr)
+                        (:address (first (:flow insn)))))))))
+  ([insns-by-addr start-addr]
+   (let [reachable-addrs (find-reachable-addresses insns-by-addr start-addr)]
+     (read-basic-block insns-by-addr start-addr (into #{} reachable-addrs)))))
+
+
 (defn thunk?
   [address]
   (and (map? address)
        (contains? address :deref)))
-
