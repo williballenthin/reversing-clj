@@ -204,7 +204,7 @@
 
 (defn analyze-instructions
   [raw-insns]
-  (let [insns (map analyze-instruction raw-insns)
+  (let [insns (map analyze-instruction (filter some? raw-insns))
         insns-by-addr (index-by insns :address)
         flows (into [] (compute-instruction-flows (vals insns-by-addr)))]
     {:insns-by-addr insns-by-addr
