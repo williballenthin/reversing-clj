@@ -101,16 +101,6 @@
         ;;   - fallthrough from previous instruction.
         ;;   - jmp from address +22
         (is (= 2 (count (get flows-by-dst 0x16))))))
-    (testing "cfg-analysis"
-      (let [cfg (make-cfg (map analyze-instruction (disassemble-all cs buf base-addr)))]
-        ;; the `push ebp` instruction is the first in the cfg, so its a root.
-        (is (= true (contains? (:roots cfg) 0x0)))
-        ;; however, `mov ebp, esp` is reached from the prev insn/byte, so not a root.
-        (is (= false (contains? (:roots cfg) 0x1)))
-        ;; the first insn is not a leave, since it falls through to next insn.
-        (is (= false (contains? (:leaves cfg) 0x0)))
-        ;; the last insn, the `ret`, is a leaf, cause it has no successor insns.
-        (is (= true (contains? (:leaves cfg) 0x29)))))
     (testing "fallthrough-sequence-analysis"
       (let [raw-insns (disassemble-all cs buf base-addr)
             insns (into [] (map analyze-instruction raw-insns))

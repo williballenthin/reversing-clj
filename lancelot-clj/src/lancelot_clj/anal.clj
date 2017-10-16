@@ -188,30 +188,6 @@
                 :type (:type flow)}))))
 
 
-;; TODO: will rename this.
-(defn make-cfg
-  "
-  Returns:
-    map: with keys:
-      - :roots - set of addresses that have no flows to them.
-      - :leaves - set of addresses that have no flows from them.
-  "
-  [insns]
-  (let [fs (into (list) (flows insns))
-        flows-by-src (group-by :src fs)
-        flows-by-dst (group-by :dst fs)]
-     ;; roots are instructions that have no flows to them.
-    {:roots (into #{} (remove nil? (for [insn insns]
-                                     (let [addr (:address insn)]
-                                       (when (nil? (get flows-by-dst addr))
-                                         addr)))))
-     ;; leaves are instructions that have no flow from them.
-     :leaves (into #{} (remove nil? (for [insn insns]
-                                      (let [addr (:address insn)]
-                                        (when (nil? (get flows-by-src addr))
-                                          addr)))))}))
-
-
 (defn read-fallthrough-sequence
   "
   collect a sequence of instruction addresses from the given address that look sorta like a basic block.
