@@ -176,12 +176,12 @@
       - :address - va of instruction.
   "
   [insn]
-  (-> {:flow (analyze-instruction-flow insn)}
+  (-> {:flow (analyze-instruction-flow insn)
+       :insn insn
+       :address (.address insn)}
       (assoc-if :cref (when (and (call? insn)
                                  (not (indirect-target? insn)))
-                        #{{:address (get-target insn)}}))
-      (assoc :insn insn)
-      (assoc :address (.address insn))))
+                        #{{:address (get-target insn)}}))))
 
 
 (defn compute-instruction-flows
