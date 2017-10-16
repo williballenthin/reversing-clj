@@ -38,4 +38,4 @@
                   (is (= mnem "push")))
               1 (testing "second opcode"
                   (is (= addr 0x1001))
-                  (is (= mnem "mov")))))))))))
+                  (is (= mnem "mov"))))))))))
