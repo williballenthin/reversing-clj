@@ -1,11 +1,14 @@
 (ns lancelot-clj.core
   (:gen-class)
-  (:require [clojure.java.io :as io]
+  (:require
             [pantomime.mime :as panto]
             [pe.core :as pe]
             [pe.macros :as pe-macros]
-            [clojure.tools.logging :as log]
-            [clojure.set :as set])
+            [lancelot-clj.dis :refer :all]
+            [lancelot-clj.anal :refer :all]
+            [clojure.java.io :as io]
+            [clojure.set :as set]
+            [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode))
@@ -148,267 +151,31 @@
     (load-bytes buf)))
 
 
-(defn call?
-  [insn]
-  (condp = (. insn id)
-    capstone.X86_const/X86_INS_CALL true
-    capstone.X86_const/X86_INS_LCALL true
-    false))
-
-
-(defn ret?
-  [insn]
-  (condp = (. insn id)
-    capstone.X86_const/X86_INS_RET true
-    capstone.X86_const/X86_INS_IRET true
-    capstone.X86_const/X86_INS_IRETD true
-    capstone.X86_const/X86_INS_IRETQ true
-    false))
-
-
-(defn jmp? [insn] (= (. insn id) capstone.X86_const/X86_INS_JMP))
-
-
-(def ^:const x86-cjmp-instructions
-  #{capstone.X86_const/X86_INS_JAE
-    capstone.X86_const/X86_INS_JA
-    capstone.X86_const/X86_INS_JBE
-    capstone.X86_const/X86_INS_JB
-    capstone.X86_const/X86_INS_JCXZ
-    capstone.X86_const/X86_INS_JECXZ
-    capstone.X86_const/X86_INS_JE
-    capstone.X86_const/X86_INS_JGE
-    capstone.X86_const/X86_INS_JG
-    capstone.X86_const/X86_INS_JLE
-    capstone.X86_const/X86_INS_JL
-    capstone.X86_const/X86_INS_JNE
-    capstone.X86_const/X86_INS_JNO
-    capstone.X86_const/X86_INS_JNP
-    capstone.X86_const/X86_INS_JNS
-    capstone.X86_const/X86_INS_JO
-    capstone.X86_const/X86_INS_JP
-    capstone.X86_const/X86_INS_JRCXZ
-    capstone.X86_const/X86_INS_JS})
-
-
-(defn cjmp? [insn] (contains? x86-cjmp-instructions (. insn id)))
-
-
-(defn get-op0
-  "fetch the first operand to the instruction"
-  [insn]
-  (let [[op &rest] (.. insn operands op)]
-    op))
-
-
-;; capstone indexing:
-;; given: [eax+10h]
-;;   - segment: 0x0
-;;   - base: 0x13 (eax)
-;;   - index: 0x0
-;;   - disp: 0x10
-
-
-(defn indirect-target?
-  [insn]
-  (let [op (get-op0 insn)]
-    (cond
-      ;; jmp eax
-      (= (.-type op) capstone.X86_const/X86_OP_REG) true
-      ;; jmp [eax+0x10]
-      ;; jmp [eax*0x8+0x10]
-      (and (= (.-type op) capstone.X86_const/X86_OP_MEM)
-           (or (not= (.. op value mem base) capstone.X86_const/X86_REG_INVALID)
-               (not= (.. op value mem index) capstone.X86_const/X86_REG_INVALID))) true
-      :default false)))
-
-
-(defn get-target
-  "assuming the given instruction has a first operand that is not indirect."
-  [insn]
-  (let [op (get-op0 insn)]
-    (cond
-      (= (.-type op) capstone.X86_const/X86_OP_IMM) (.. op value imm)
-      ;; should we annotate this value with the `deref`?
-      ;; upside: more information.
-      ;; downside: inconsistent return value type.
-      (= (.-type op) capstone.X86_const/X86_OP_MEM) {:deref (.. op value mem disp)}
-      :default nil)))
-
-
-(defn nop?
-  [insn]
-  (if (= (.-id insn) capstone.X86_const/X86_INS_NOP)
-    true
-    (if (not (= (count (.-op (.-operands insn))) 2))
-      false
-      (let [[op0 op1] (.-op (.-operands insn))]
-        (cond
-          ;; via: https://github.com/uxmal/nucleus/blob/master/disasm.cc
-          (and (= (. insn id) capstone.X86_const/X86_INS_MOV)
-               (= (. op0 type) capstone.X86_const/X86_OP_REG)
-               (= (. op1 type) capstone.X86_const/X86_OP_REG)
-               (= (.. op0 value reg) (.. op1 value reg))) true
-          (and (= (. insn id) capstone.X86_const/X86_INS_XCHG)
-               (= (. op0 type) capstone.X86_const/X86_OP_REG)
-               (= (. op1 type) capstone.X86_const/X86_OP_REG)
-               (= (.. op0 value reg) (.. op1 value reg))) true
-          (and (= (. insn id) capstone.X86_const/X86_INS_LEA)
-               (= (. op0 type) capstone.X86_const/X86_OP_REG)
-               (= (. op1 type) capstone.X86_const/X86_OP_MEM)
-               (= (.. op1 value mem segment) capstone.X86_const/X86_REG_INVALID)
-               (= (.. op1 value mem base) (.. op0 value reg))
-               (= (.. op1 value mem index) capstone.X86_const/X86_REG_INVALID)
-               (= (.. op1 value mem disp) 0)) true
-          :default false)))))
-
-
-
-(defn analyze-instruction-flow
-  [insn]
-  (-> #{}
-      (conj-if (when (not (or (ret? insn)
-                              (jmp? insn)))
-                 {:type :fall-through
-                  :address (+ (. insn address) (. insn size))}))
-      (conj-if (when (and (jmp? insn)
-                          (not (indirect-target? insn)))
-                 {:type :jmp
-                  :address (get-target insn)}))
-      (conj-if (when (and (cjmp? insn)
-                          (not (indirect-target? insn)))
-                 {:type :cjmp
-                  :address (get-target insn)}))))
-
-
-(defn analyze-instruction
-  [workspace insn]
-  (-> {:flow (analyze-instruction-flow insn)}
-      (assoc-if :cref (when (and (call? insn)
-                                 (not (indirect-target? insn)))
-                        #{{:address (get-target insn)}}))))
-
-
-(defn thunk?
-  [address]
-  (and (map? address)
-       (contains? address :deref)))
-
-
-(defn recursive-descent-disassemble
-  [workspace va]
-  (loop [insns {}
-         q (conj clojure.lang.PersistentQueue/EMPTY va)]
-    (if-let [va (peek q)]
-      (let [insn (disassemble workspace va)
-            ana (analyze-instruction workspace insn)
-            next-addrs (map :address (:flow ana))
-            new-addrs (filter #(and (not (thunk? %))
-                                    (not (contains? insns %)))
-                              next-addrs)]
-        (recur (assoc insns va ana)
-               (apply conj (pop q) new-addrs)))
-      insns)))
-
-
-(defn with-queue
-  "
-  recursively process in a breadth-first manner, given some seed elements.
-  invokes the given function `f`, which should return the next keys to process and processed value.
-  results are assoc'd into a map using these keys and processed values.
-  skips keys that have already been encountered.
-
-  python::
-
-      m = {}
-      while q:
-        k = q.pop(0)
-        next, v = f(k)
-        m[k] = v
-        q.append(*next)
-      return m
-  "
-  ([f init-entries m]
-   (loop [m m
-          q (apply conj clojure.lang.PersistentQueue/EMPTY init-entries)]
-     (if-let [i (peek q)]
-       (if (contains? m i)
-         (recur m (pop q))
-         (let [[next r] (f i)]
-           (recur (assoc m i r)
-                  (apply conj (pop q) next))))
-       m)))
-  ([f init-entries]
-   (with-queue f init-entries {})))
-
-
-(defn step-queue
-  "syntax sugar for `with-queue`"
-  [next value]
-  [next value])
-
-
-(defn recursive-descent-disassemble
-  [workspace va]
-  (with-queue (fn [va]
-                (let [insn (disassemble workspace va)
-                      ana (analyze-instruction workspace insn)
-                      next-addrs (filter #(not (thunk? %)) (map :address (:flow ana)))]
-                  (step-queue next-addrs ana)))
-              [va]))
-
-
-(defn extract-cref-addresses
-  [insns]
-  (remove thunk? (map :address (flatten (remove nil? (map :cref insns))))))
-
-
-(defn explore-functions
-  [workspace vas]
-  (with-queue (fn [va]
-                (let [insns (recursive-descent-disassemble workspace va)
-                      functions (extract-cref-addresses (vals insns))]
-                  (step-queue functions insns)))
-              vas))
-
-
-(defn get-entrypoints
-  [pe]
-  (map #(+ (:function-address %)
-           (get-in pe [:nt-header :optional-header :ImageBase]))
-       (remove :forwarded? (pe/get-exports pe))))
-
-
-(def A)
-
-(defn analyze
-  [workspace]
-  (let [explored-functions (explore-functions workspace (get-entrypoints (:pe workspace)))
-        function-vas (keys explored-functions)]
-    (alter-var-root #'A (constantly explored-functions))
-    {:functions function-vas
-     :instructions (merge (vals explored-functions))
-     :workspace workspace}))
-
-
-(let [b (map-file kern32')
-      p (pe/parse-pe b)
-      w (load-file kern32')
-      nop (disassemble w 0x68901000)
-      call (disassemble w 0x68901032)
-      mov (disassemble w 0x68901010)
-      jnz (disassemble w 0x6890102b)]
-  (let [ana (analyze w)]
-    (count (:instructions ana))))
+(defmethod print-method Number
+  [n ^java.io.Writer w]
+  (.write w (format "0x%X" n)))
 
 
 (defn -main
-  "I don't do a whole lot ... yet."
   [& args]
-  (Thread/sleep 5000)
-  (let [b (map-file (first args))
-        p (pe/parse-pe b)
-        w (load-file (first args))
-        fvas (keys (explore-functions w (get-entrypoints p)))]
-    (doseq [fva (sort fvas)]
-      (println (format "0x%x" fva)))))
+  (let [input-path (first args)
+        b (map-file input-path)
+        workspace (load-file input-path)
+        text-section (pe/get-section (:pe workspace) ".text")
+
+        text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
+        _ (log/info "text section at rva: " text-rva)
+        text-addr (pe/rva->va (:pe workspace) text-rva)
+        _ (log/info "text section at va: " text-addr)
+
+        entry-addr (get-entrypoint (:pe workspace))
+        _ (log/info "entry va: " entry-addr)
+
+        _ (log/info "disassembling...")
+        raw-insns (disassemble-all (:dis workspace) text-section text-addr)
+        _ (log/info "analyzing...")
+        insn-analysis (analyze-instructions raw-insns)]
+    (log/info "bb reading...")
+    (prn (read-basic-block insn-analysis (get-entrypoint (:pe workspace))))
+    (log/info "done.")
+    (shutdown-agents)))
