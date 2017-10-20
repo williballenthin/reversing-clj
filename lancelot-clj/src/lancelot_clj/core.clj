@@ -42,14 +42,20 @@
     buffer))
 
 
+(defn panto-taste
+  [byte-buffer]
+  (pe-macros/with-position byte-buffer 0x0
+    (let [;; should be able to get by with a 256 byte taste of the header.
+          arr (byte-array 0x100)
+          _ (.get byte-buffer arr)]
+      ;; delegate to pantomime, which asks apache tika.
+      ;; overkill, but easy.
+      (panto/mime-type-of arr))))
+
+
 (defn pe32?
   [byte-buffer]
-  (let [;; should be able to get by with a 256 byte taste of the header.
-        arr (byte-array 0x100)
-        _ (.get byte-buffer arr)]
-    ;; delegate to pantomime, which asks apache tika.
-    ;; overkill, but easy.
-    (= "application/x-msdownload; format=pe32" (panto/mime-type-of arr))))
+  (= "application/x-msdownload; format=pe32" (panto-taste byte-buffer)))
 
 
 (defn detect-file-type
