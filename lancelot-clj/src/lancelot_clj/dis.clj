@@ -33,6 +33,18 @@
   ([dis buf rva]
    (disassemble-one dis buf rva 0x0)))
 
+(defn chunked-pmap [f partition-size coll]
+  ;; via: https://stackoverflow.com/a/19972453/87207
+  (->> coll                           ; Start with original collection.
+
+       (partition-all partition-size) ; Partition it into chunks.
+
+       (pmap (comp doall              ; Map f over each chunk,
+                   (partial map f)))  ; and use doall to force it to be
+                                      ; realized in the worker thread.
+
+       (apply concat)))               ; Concatenate the chunked results
+                                      ; to form the return value.
 
 (defn disassemble-all
   "
@@ -47,9 +59,7 @@
       < ...
   "
   [dis buf rva]
-  (for [offset (range (dec (.limit buf)))]
-    (let [insn (disassemble-one dis buf (+ rva offset) offset)]
-      (when (nil? insn)
-        (log/info "failed to disassemble: 0x%x" (+ rva offset)))
-      insn)))
-
+  (chunked-pmap (fn [offset]
+                  (disassemble-one dis buf (+ rva offset) offset))
+                0x10000
+                (range (dec (.limit buf)))))
