@@ -1,7 +1,9 @@
 (ns lancelot-clj.anal
   (:gen-class)
-  (:require [clojure.tools.logging :as log]
-            [clojure.set :as set])
+  (:require
+            [pe.core :as pe]
+            [clojure.set :as set]
+            [clojure.tools.logging :as log])
   (:import [capstone.X86_const]))
 
 
@@ -329,3 +331,17 @@
   [address]
   (and (map? address)
        (contains? address :deref)))
+
+
+(defn get-exports
+  [pe]
+  (map #(+ (:function-address %)
+           (get-in pe [:nt-header :optional-header :ImageBase]))
+       (remove :forwarded? (pe/get-exports pe))))
+
+
+(defn get-entrypoint
+  [pe]
+  (+
+    (get-in pe [:nt-header :optional-header :ImageBase])
+    (get-in pe [:nt-header :optional-header :AddressOfEntryPoint])))
