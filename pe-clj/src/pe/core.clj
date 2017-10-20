@@ -354,10 +354,11 @@
   "
   [pe directory]
   (let [dir (get directory-descriptions directory)
-        data-directory (get-in pe [:nt-header :optional-header :data-directories (:index dir)])
-        directory-buf (get-data pe (:rva data-directory) (:size data-directory))
-        parsed-directory (unpack (:spec dir) directory-buf)]
-    parsed-directory))
+        data-directory (get-in pe [:nt-header :optional-header :data-directories (:index dir)])]
+    (when (< 0 (:size data-directory))
+      (let [directory-buf (get-data pe (:rva data-directory) (:size data-directory))
+            parsed-directory (unpack (:spec dir) directory-buf)]
+        parsed-directory))))
 
 
 (defmulti parse-directory
@@ -367,7 +368,7 @@
 
 (defmethod parse-directory :export
   [pe directory]
-  (let [dir (parse-basic-directory pe :export)]
+  (if-let [dir (parse-basic-directory pe :export)]
     (merge dir {:Name (get-ascii pe (:AddressOfName dir))})))
 
 
@@ -391,19 +392,19 @@
 
 (defn- get-export-tables
   [pe]
-  (let [export-directory (parse-directory pe :export)
-        table-size (* 4 (:NumberOfNames export-directory))
-        uint32-table-spec (table-spec (t/uint32-type) (:NumberOfNames export-directory))
-        short-table-spec (table-spec (t/ushort-type) (:NumberOfNames export-directory))
-        functions-table-buf (get-data pe (:AddressOfFunctions export-directory) table-size)
-        functions-table (unpack uint32-table-spec functions-table-buf)
-        names-table-buf (get-data pe (:AddressOfNames export-directory) table-size)
-        names-table (unpack uint32-table-spec names-table-buf)
-        ordinals-table-buf (get-data pe (:AddressOfOrdinals export-directory) table-size)
-        ordinals-table (unpack short-table-spec ordinals-table-buf)]
-    {:functions functions-table
-     :names names-table
-     :ordinals ordinals-table}))
+  (if-let [export-directory (parse-directory pe :export)]
+    (let [table-size (* 4 (:NumberOfNames export-directory))
+          uint32-table-spec (table-spec (t/uint32-type) (:NumberOfNames export-directory))
+          short-table-spec (table-spec (t/ushort-type) (:NumberOfNames export-directory))
+          functions-table-buf (get-data pe (:AddressOfFunctions export-directory) table-size)
+          functions-table (unpack uint32-table-spec functions-table-buf)
+          names-table-buf (get-data pe (:AddressOfNames export-directory) table-size)
+          names-table (unpack uint32-table-spec names-table-buf)
+          ordinals-table-buf (get-data pe (:AddressOfOrdinals export-directory) table-size)
+          ordinals-table (unpack short-table-spec ordinals-table-buf)]
+      {:functions functions-table
+       :names names-table
+       :ordinals ordinals-table})))
 
 
 (defn- forwarded?
@@ -432,9 +433,10 @@
 
 (defn get-exports
   [pe]
-  (let [tables (get-export-tables pe)]
+  (if-let [tables (get-export-tables pe)]
     (for [i (range (count (get-in tables [:ordinals :entries])))]
-      (get-export pe tables i))))
+      (get-export pe tables i))
+    (list)))
 
 
 (def ^:private the-empty-import-descriptor (ByteBuffer/allocate (spec-size image-import-directory-spec)))
