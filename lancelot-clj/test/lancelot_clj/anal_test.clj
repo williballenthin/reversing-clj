@@ -1,7 +1,9 @@
 (ns lancelot-clj.anal-test
   (:require [clojure.test :refer :all]
+            [pe.core :as pe]
             [lancelot-clj.dis :refer :all]
             [lancelot-clj.anal :refer :all]
+            [lancelot-clj.core :refer [load-file]]
             [lancelot-clj.testutils :refer :all]
             [clojure.java.io :as io])
   (:import (java.nio ByteBuffer ByteOrder))
@@ -49,7 +51,7 @@
         (is (= (.-address i0) base-addr))
         (is (= (.-mnemonic i0) "push"))
         (is (= (.-opStr i0) "ebp")))
-      (let [insns (into [] (map format-insn (disassemble-all cs buf base-addr)))]
+      (let [insns (into [] (map format-insn (sort-by #(.address %) (disassemble-all cs buf base-addr))))]
         (is (= (nth insns 0) "0x0 push ebp"))
         (is (= (nth insns 1) "0x1 mov ebp, esp"))
         ;; note this is overlapping the mov above
@@ -148,7 +150,7 @@
                [0x24 0x25 0x26 0x27 0x28 0x29]))))))
 
 
-(let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
+(let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32 true)
       base-addr 0x0
       buf (make-byte-buffer [0x55              ;; 0  push    ebp
                              0x89 0xE5         ;; 1  mov     ebp, esp
@@ -177,9 +179,42 @@
                              0xC9              ;; 28 leave
                              0xC2 0x10 0x00])  ;; 29 retn    10h                  <<--- ret, no fallthrough
       raw-insns (disassemble-all cs buf base-addr)
-      insn-analysis (analyze-instructions raw-insns)
-      {:keys [insns-by-addr
-              flows-by-src
-              flows-by-dst]} insn-analysis
-      reachable-addrs (into #{} (find-reachable-addresses insn-analysis 0x0))]
-  (read-basic-block insn-analysis 0x0))
+      i0 (first raw-insns)
+      ;;(format-insn i0)
+      ;;(get-op0 i0))
+      insn-analysis (analyze-instructions raw-insns)])
+;;{:keys [insns-by-addr
+;;        flows-by-src
+;;        flows-by-dst] insn-analysis
+;;reachable-addrs (into #{} (find-reachable-addresses insn-analysis 0x0))])
+;;(read-basic-block insn-analysis 0x0))
+;;insn-analysis)
+;; (map analyze-instruction (filter some? raw-insns)))
+;;reachable-addrs)
+;;raw-insns)
+
+
+(def fixtures (.getPath (clojure.java.io/resource "fixtures")))
+(def kern32 (io/file fixtures "kernel32.dll"))
+(def notepad (io/file fixtures "notepad.exe"))
+(def calc (io/file fixtures "calc.exe"))
+
+
+
+(def ws (load-file calc))
+
+(get-entrypoint (:pe ws))
+
+
+#_(let [workspace (load-file calc)
+        text-section (pe/get-section (:pe workspace) ".text")
+        text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
+        text-addr (pe/rva->va (:pe workspace) text-rva)
+        cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
+        _ (prn "disassembling...")
+        raw-insns (disassemble-all cs text-section text-addr)
+        _ (prn "analyzing...")
+        insn-analysis (analyze-instructions raw-insns)]
+    (prn "bb reading...")
+    (prn (read-basic-block insn-analysis text-addr))
+    (prn "done."))
