@@ -6,6 +6,7 @@
             [pe.macros :as pe-macros]
             [lancelot-clj.dis :refer :all]
             [lancelot-clj.anal :refer :all]
+            [lancelot-clj.testutils :refer :all]
             [clojure.java.io :as io]
             [clojure.set :as set]
             [clojure.tools.logging :as log])
@@ -145,13 +146,13 @@
    :op (.-opStr op)})
 
 
-(defn load-file
+(defn load-binary
   [path]
   (let [buf (map-file path)]
     (load-bytes buf)))
 
 
-(defmethod print-method Number
+#_(defmethod print-method Number
   [n ^java.io.Writer w]
   (.write w (format "0x%X" n)))
 
@@ -160,7 +161,7 @@
   [& args]
   (let [input-path (first args)
         b (map-file input-path)
-        workspace (load-file input-path)
+        workspace (load-binary input-path)
         text-section (pe/get-section (:pe workspace) ".text")
 
         text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
@@ -176,6 +177,10 @@
         _ (log/info "analyzing...")
         insn-analysis (analyze-instructions raw-insns)]
     (log/info "bb reading...")
-    (prn (read-basic-block insn-analysis (get-entrypoint (:pe workspace))))
+
+    (doseq [insn-addr (sort (read-basic-block insn-analysis (get-entrypoint (:pe workspace))))]
+      (let [insn (get-in insn-analysis [:insns-by-addr insn-addr :insn])]
+        (prn (format-insn insn))))
+
     (log/info "done.")
     (shutdown-agents)))
