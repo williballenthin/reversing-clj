@@ -20,13 +20,13 @@
   (into {} (map #(vector (get % k) %) col)))
 
 
-(defn conj-if [c e]
+(defn- conj-if [c e]
   (if (not (nil? e))
     (conj c e)
     c))
 
 
-(defn assoc-if [m k e]
+(defn- assoc-if [m k e]
   (if (not (nil? e))
     (assoc m k e)
     m))

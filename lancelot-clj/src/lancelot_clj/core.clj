@@ -13,29 +13,23 @@
   (:import [capstone.X86_const]))
 
 
-(def fixtures' (.getPath (clojure.java.io/resource "fixtures")))
-(def kern32' (io/file fixtures' "kernel32.dll"))
-
-(defn hex
+(defn- hex
   [i]
   (format "%X" i))
 
 
-(defn conj-if [c e]
+(defn- conj-if [c e]
   (if (not (nil? e))
     (conj c e)
     c))
 
 
-(defn assoc-if [m k e]
+(defn- assoc-if [m k e]
   (if (not (nil? e))
     (assoc m k e)
     m))
 
 
-;;(defmethod print-method Number
-;;  [n ^java.io.Writer w]
-;;  (.write w (format "0x%X" n)))
 
 
 (defn map-file
