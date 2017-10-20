@@ -3,7 +3,7 @@
             [pe.core :as pe]
             [lancelot-clj.dis :refer :all]
             [lancelot-clj.anal :refer :all]
-            [lancelot-clj.core :refer [load-file]]
+            [lancelot-clj.core :refer [load-binary]]
             [lancelot-clj.testutils :refer :all]
             [clojure.java.io :as io])
   (:import (java.nio ByteBuffer ByteOrder))
@@ -147,74 +147,34 @@
         (is (= (read-basic-block insn-analysis 0x1A)
                [0x1a 0x1c 0x1e 0x21 0x22]))
         (is (= (read-basic-block insn-analysis 0x24)
-               [0x24 0x25 0x26 0x27 0x28 0x29]))))))
-
-
-(let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32 true)
-      base-addr 0x0
-      buf (make-byte-buffer [0x55              ;; 0  push    ebp
-                             0x89 0xE5         ;; 1  mov     ebp, esp
-                             0x50              ;; 3  push    eax
-                             0x53              ;; 4  push    ebx
-                             0x51              ;; 5  push    ecx
-                             0x56              ;; 6  push    esi
-                             0x8B 0x75 0x08    ;; 7  mov     esi, [ebp+arg_0]
-                             0x8B 0x4D 0x0C    ;; A  mov     ecx, [ebp+arg_4]
-                             0xC1 0xE9 0x02    ;; D  shr     ecx, 2
-                             0x8B 0x45 0x10    ;; 10 mov     eax, [ebp+arg_8]
-                             0x8B 0x5D 0x14    ;; 13 mov     ebx, [ebp+arg_C]
-                             ;; 16:        ; CODE XREF: +22
-                             0x85 0xC9         ;; 16 test    ecx, ecx
-                             0x74 0x0A         ;; 18 jz      short +24            <<--- cjmp
-                             0x31 0x06         ;; 1A xor     [esi], eax
-                             0x01 0x1E         ;; 1C add     [esi], ebx
-                             0x83 0xC6 0x04    ;; 1E add     esi, 4
-                             0x49              ;; 21 dec     ecx
-                             0xEB 0xF2         ;; 22 jmp     short +16            <<--- jmp, no fallthrough
-                             ;; 24:        ; CODE XREF: +18
-                             0x5E              ;; 24 pop     esi
-                             0x59              ;; 25 pop     ecx
-                             0x5B              ;; 26 pop     ebx
-                             0x58              ;; 27 pop     eax
-                             0xC9              ;; 28 leave
-                             0xC2 0x10 0x00])  ;; 29 retn    10h                  <<--- ret, no fallthrough
-      raw-insns (disassemble-all cs buf base-addr)
-      i0 (first raw-insns)
-      ;;(format-insn i0)
-      ;;(get-op0 i0))
-      insn-analysis (analyze-instructions raw-insns)])
-;;{:keys [insns-by-addr
-;;        flows-by-src
-;;        flows-by-dst] insn-analysis
-;;reachable-addrs (into #{} (find-reachable-addresses insn-analysis 0x0))])
-;;(read-basic-block insn-analysis 0x0))
-;;insn-analysis)
-;; (map analyze-instruction (filter some? raw-insns)))
-;;reachable-addrs)
-;;raw-insns)
-
-
-(def fixtures (.getPath (clojure.java.io/resource "fixtures")))
-(def kern32 (io/file fixtures "kernel32.dll"))
-(def notepad (io/file fixtures "notepad.exe"))
-(def calc (io/file fixtures "calc.exe"))
-
-
-
-(def ws (load-file calc))
-
-(get-entrypoint (:pe ws))
-
-
-#_(let [workspace (load-file calc)
-        text-section (pe/get-section (:pe workspace) ".text")
-        text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
-        text-addr (pe/rva->va (:pe workspace) text-rva)
-        cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
-        _ (prn "disassembling...")
-        raw-insns (disassemble-all cs text-section text-addr)
-        _ (prn "analyzing...")
+               [0x24 0x25 0x26 0x27 0x28 0x29])))))
+  (let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
+        buf (make-byte-buffer [;;00000000 <A>:
+                               ;;0:  b8 01 00 00 00          mov    eax,0x1
+                               ;;5:  e8 01 00 00 00          call   b <B>
+                               ;;a:  c3                      ret
+                               ;;0000000b <B>:
+                               ;;b:  b8 02 00 00 00          mov    eax,0x2
+                               ;;10: e8 01 00 00 00          call   16 <C>
+                               ;;15: c3                      ret
+                               ;;00000016 <C>:
+                               ;;16: b8 03 00 00 00          mov    eax,0x3
+                               ;;1b: e8 e0 ff ff ff          call   0 <A>
+                               ;;20: c3                      ret
+                               0xB8, 0x01, 0x00, 0x00, 0x00,
+                               0xE8, 0x01, 0x00, 0x00, 0x00,
+                               0xC3,
+                               0xB8, 0x02, 0x00, 0x00, 0x00,
+                               0xE8, 0x01, 0x00, 0x00, 0x00,
+                               0xC3,
+                               0xB8, 0x03, 0x00, 0x00, 0x00,
+                               0xE8, 0xE0, 0xFF, 0xFF, 0xFF,
+                               0xC3])
+        raw-insns (disassemble-all cs buf 0x0)
         insn-analysis (analyze-instructions raw-insns)]
-    (prn "bb reading...")
-    (prn (read-basic-block insn-analysis text-addr))
-    (prn "done."))
+    (testing "find-function-targets"
+      (is (= '(0xB) (find-function-targets insn-analysis 0x0)))
+      (is (= '(0x16) (find-function-targets insn-analysis 0xB)))
+      (is (= '(0x0) (find-function-targets insn-analysis 0x16))))
+    (testing "find-functions"
+      (is (= #{0x0 0xB 0x16} (find-functions insn-analysis (list 0x0)))))))

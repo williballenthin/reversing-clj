@@ -345,3 +345,56 @@
   (+
     (get-in pe [:nt-header :optional-header :ImageBase])
     (get-in pe [:nt-header :optional-header :AddressOfEntryPoint])))
+
+
+(defn get-insns
+  "map a list of instruction addresses to the instruction instances"
+  [{:keys [:insns-by-addr]} addrs]
+  (for [addr addrs]
+    (get insns-by-addr addr)))
+
+
+(defn find-function-targets
+  "
+  search for target addresses of calls from instructions reachable from the given address.
+
+  example::
+
+      => (find-function-targets analysis 0x401000)
+      #{0x40101B 0x401030 ...}
+  "
+  [insn-analysis fva]
+  (let [insn-addrs (find-reachable-addresses insn-analysis fva)
+        insns (get-insns insn-analysis insn-addrs)
+        calls (filter :cref insns)]
+    (filter some?
+            (flatten
+             (for [call calls]
+               (for [cref (:cref call)]
+                 (let [address (:address cref)]
+                   (when (number? address)
+                     address))))))))
+
+
+(defn find-functions
+  "
+  recursively search for called addresses from the given set of seed instruction addresses.
+
+  example::
+
+      => (find-functions analysis (conj (get-exports ws)
+                                        (get-entrypoint ws)))
+      #{0x40101B 0x401030 ...}
+  "
+  [insn-analysis init-addrs]
+  (loop [q (apply conj clojure.lang.PersistentQueue/EMPTY init-addrs)
+         seen #{}]
+    (if-let [addr (peek q)]
+      (if (contains? seen addr)
+        ;; if already processed, keep going
+        (recur (pop q) seen)
+        ;; otherwise, search for new functions
+        (recur (apply conj (pop q) (find-function-targets insn-analysis addr))
+               (conj seen addr)))
+      ;; when work is done, return set of seen addresses.
+      seen)))
