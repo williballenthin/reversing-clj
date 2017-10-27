@@ -1,7 +1,7 @@
-(ns com.williballethin.pe.core-test
+(ns pe.core-test
   (:require [clojure.test :refer :all]
-            [com.williballenthin.pe.core :refer :all]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [pe.core :refer :all]))
 
 
 (def fixtures (.getPath (clojure.java.io/resource "fixtures")))
