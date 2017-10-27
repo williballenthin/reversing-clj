@@ -1,0 +1,60 @@
+{:objects
+ {:Sample
+  {:description "a binary sample"
+   :fields
+   {:name {:type (non-null String)
+           :description "human readable name for the file (non-unique)"}
+    :md5 {:type (non-null String)
+          :description "the MD-5 hash of the sample contents"}
+    :sha1 {:type (non-null String)
+           :description "the SHA-1 hash of the sample contents"}
+    :sha256 {:type (non-null String)
+             :description "the SHA-256 hash of the sample contents"}
+    :exports {:type (list :Function)
+              :description "functions exported by this sample"
+              :resolve :Sample/exports}
+    :entrypoint {:type :Function
+                 :description "virtual address of entrypoint function of the sample"
+                 :resolve :Sample/entrypoint}}}
+  :Address
+  {:description "content at a given address"
+   :fields
+   {:va {:type Int
+         :description "the virtual address of the content"}
+    :insn {:type :Instruction
+           :description "the disassembled instruction at this address"
+           :resolve :Address/instruction}}}
+  :Instruction
+  {:description "a disassembled instruction"
+   :fields
+   {:mnem {:type String
+           :description "the human-readable mnenonic"}
+    :size {:type Int
+           :description "the length in bytes of this instruction"}
+    :operands {:type (list :Operand)
+               :description "operands to the instruction"}
+    :opstr {:type String
+            :description "the human-readable reprsentation of the operands"}
+    :str {:type String
+          :description "the human-readable representation"}}}
+  :Operand
+  {:description "an operand to an instruction"
+   :fields
+   {:str {:type String
+          :description "the human-readable representation"}}}
+    ;; TODO: lots of other fields
+  :Function
+  {:description "a function"
+   :fields
+   {:sample {:type (non-null String)} ;; TODO: should be of type sample
+    :va {:type Int
+         :description "the non-relocated function entry virtual address"}
+    :address {:type :Address
+              :description "the content at the start of the function"
+              :resolve :Function/address}}}}
+ :queries
+ {:sample_by_md5  ;; TODO: can we use slash here?
+  {:type :Sample
+   :description "fetch sample by its MD5 hash"
+   :args {:md5 {:type (non-null String)}}
+   :resolve :query/sample-by-md5}}}
