@@ -1,18 +1,20 @@
 # capstone-clj
 
-FIXME: description
+This is a Clojure wrapper library for the Capstone disassembly engine.
 
 ## Installation
 
 Dependencies:
 
-  - capstone
+  - capstone native library
+    - on linux: install capstone from apt or source
+    - on windows: consider placing this in your $PATH
 
 ## Usage
 
-FIXME: explanation
-
-    $ java -jar capstone-clj-0.1.0-standalone.jar [args]
+This is a library for disassembling bytes into instructions.
+It doesn't do much as a standalone executable.
+See the unit tests for examples of how to invoke its routines.
 
 ## Examples
 
@@ -25,19 +27,6 @@ FIXME: explanation
 ```
  $  lein uberjar
 ```
-
-#### run uberjar:
-```
- $  java -cp "resources/*:target/uberjar/capstone-clj-0.1.0-SNAPSHOT-standalone.jar" capstone_clj.core
-```
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
 
 ## License
 
