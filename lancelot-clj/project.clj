@@ -12,7 +12,8 @@
                  [com.novemberain/pantomime "2.9.0"]
                  ;; for logging
                  [org.clojure/tools.logging "0.4.0"]
-                 [ch.qos.logback/logback-classic "1.1.3"]]
+                 [ch.qos.logback/logback-classic "1.1.3"]
+                 [com.walmartlabs/lacinia "0.22.0"]]
   :main ^:skip-aot lancelot-clj.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
