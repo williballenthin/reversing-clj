@@ -111,7 +111,6 @@
 (defn byte-buffer->byte-array
   [byte-buffer]
   (let [size (byte-buffer-size byte-buffer)
-        _ (prn "size" size)
         buf (byte-array size)]
     (pe-macros/with-position byte-buffer 0
       (.get byte-buffer buf))
