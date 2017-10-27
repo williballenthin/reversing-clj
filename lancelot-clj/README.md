@@ -4,7 +4,11 @@ FIXME: description
 
 ## Installation
 
-Download from http://example.com/FIXME.
+requirements:
+
+  - capstone-clj
+  - pe-clj
+
 
 ## Usage
 
