@@ -1,26 +1,24 @@
 (ns lancelot-clj.core
   (:gen-class)
   (:require
-            [pantomime.mime :as panto]
-            [pe.core :as pe]
-            [pe.macros :as pe-macros]
-            [lancelot-clj.dis :refer :all]
-            [lancelot-clj.anal :refer :all]
-            [lancelot-clj.testutils :refer :all]
-            [clojure.java.io :as io]
-            [clojure.set :as set]
-            [clojure.tools.logging :as log])
+   [pantomime.mime :as panto]
+   [pe.core :as pe]
+   [pe.macros :as pe-macros]
+   [lancelot-clj.dis :refer :all]
+   [lancelot-clj.anal :refer :all]
+   [lancelot-clj.testutils :refer :all]
+   [clojure.java.io :as io]
+   [clojure.set :as set]
+   [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode))
   (:import [capstone.Capstone])
   (:import [capstone.X86_const]))
 
-
 (defn- hex
   [i]
   (format "%X" i))
-
 
 (defn- conj-if [c e]
   (if (not (nil? e))
@@ -33,9 +31,6 @@
     (assoc m k e)
     m))
 
-
-
-
 (defn map-file
   [path]
   (let [file (RandomAccessFile. path "r")
@@ -44,7 +39,6 @@
         _ (.load buffer)
         _ (.order buffer ByteOrder/LITTLE_ENDIAN)]
     buffer))
-
 
 (defn panto-taste
   [byte-buffer]
@@ -56,11 +50,9 @@
       ;; overkill, but easy.
       (panto/mime-type-of arr))))
 
-
 (defn pe32?
   [byte-buffer]
   (= "application/x-msdownload; format=pe32" (panto-taste byte-buffer)))
-
 
 (defn detect-file-type
   [byte-buffer]
@@ -68,9 +60,7 @@
     (pe32? byte-buffer) :pe32
     :default :unknown))
 
-
 (defmulti load-bytes detect-file-type)
-
 
 (defn map-pe-header
   [pe]
@@ -83,7 +73,6 @@
      ;; TODO: remove `dec` once rebuild pe.
      :data (pe/get-data pe 0 (dec header-size))}))
 
-
 (defn map-pe-section
   [pe section]
   (let [start (+ (:VirtualAddress section) (get-in pe [:nt-header :optional-header :ImageBase]))]
@@ -95,13 +84,11 @@
      :permissions #{:read :write :execute}
      :meta section}))
 
-
 (defn map-pe
   [pe]
   (into [(map-pe-header pe)]
         (map #(map-pe-section pe %)
              (vals (:section-headers pe)))))
-
 
 (defmethod load-bytes :pe32
   [byte-buffer]
@@ -115,7 +102,6 @@
      :map (map-pe pe)
      :dis cs}))
 
-
 (defn get-bytes
   [workspace va length]
   (let [region (first (filter #(and (<= (:start %) va)
@@ -128,12 +114,10 @@
       (.get data arr)
       arr)))
 
-
 (defn disassemble
   [workspace va]
   (let [code (get-bytes workspace va 0x10)]  ;; 0x10 is an arbitrary max-insn-length constant
-     (first (.disasm (:dis workspace) code va 1))))
-
+    (first (.disasm (:dis workspace) code va 1))))
 
 (defn op->clj
   "
@@ -145,17 +129,14 @@
    :mnem (.-mnemonic op)
    :op (.-opStr op)})
 
-
 (defn load-binary
   [path]
   (let [buf (map-file path)]
     (load-bytes buf)))
 
-
 #_(defmethod print-method Number
-  [n ^java.io.Writer w]
-  (.write w (format "0x%X" n)))
-
+    [n ^java.io.Writer w]
+    (.write w (format "0x%X" n)))
 
 (defn -main
   [& args]

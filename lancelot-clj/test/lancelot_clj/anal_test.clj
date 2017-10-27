@@ -11,11 +11,6 @@
   (:import [capstone.X86_const]))
 
 
-(defmethod print-method Number
-  [n ^java.io.Writer w]
-  (.write w (format "0x%X" n)))
-
-
 (deftest analysis-test
   (let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
         base-addr 0x0
