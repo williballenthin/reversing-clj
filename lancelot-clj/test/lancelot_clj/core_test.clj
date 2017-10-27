@@ -1,6 +1,7 @@
 (ns lancelot-clj.core-test
   (:require [clojure.test :refer :all]
-            [lancelot-clj.core :refer :all]
+            [lancelot-clj.core :refer :all :as core]
+            [lancelot-clj.anal :as anal]
             [clojure.java.io :as io]))
 
 
@@ -9,7 +10,7 @@
 
 
 (deftest pe32-test
-  (let [workspace (load-file kern32)
+  (let [workspace (load-binary kern32)
         nop-va 0x68901000
         call-va 0x68901032
         mov-va 0x68901010
@@ -23,27 +24,20 @@
       (is (= (.-mnemonic (disassemble workspace 0x68901000)) "nop"))
       (is (= (:mnem (op->clj (disassemble workspace 0x68901000))) "nop")))
     (testing "analyze"
-      (is (= true (call? (disassemble workspace call-va))))
-      (is (= false (call? (disassemble workspace nop-va))))
-      (is (= false (call? (disassemble workspace mov-va))))
-      (is (= false (call? (disassemble workspace jnz-va))))
+      (is (= true (anal/call? (disassemble workspace call-va))))
+      (is (= false (anal/call? (disassemble workspace nop-va))))
+      (is (= false (anal/call? (disassemble workspace mov-va))))
+      (is (= false (anal/call? (disassemble workspace jnz-va))))
 
-      (is (= true (nop? (disassemble workspace nop-va))))
-      (is (= true (nop? (disassemble workspace mov-va))))  ;; this is a semantic nop
-      (is (= false (nop? (disassemble workspace call-va))))
-      (is (= false (nop? (disassemble workspace jnz-va))))
+      (is (= true (anal/nop? (disassemble workspace nop-va))))
+      (is (= true (anal/nop? (disassemble workspace mov-va))))  ;; this is a semantic nop
+      (is (= false (anal/nop? (disassemble workspace call-va))))
+      (is (= false (anal/nop? (disassemble workspace jnz-va))))
 
-      (is (= true (cjmp? (disassemble workspace jnz-va))))
-      (is (= false (cjmp? (disassemble workspace nop-va))))
-      (is (= false (cjmp? (disassemble workspace call-va))))
-      (is (= false (cjmp? (disassemble workspace mov-va))))
+      (is (= true (anal/cjmp? (disassemble workspace jnz-va))))
+      (is (= false (anal/cjmp? (disassemble workspace nop-va))))
+      (is (= false (anal/cjmp? (disassemble workspace call-va))))
+      (is (= false (anal/cjmp? (disassemble workspace mov-va))))
 
-      (is (= false (indirect-target? (disassemble workspace call-va))))
-      (is (= false (indirect-target? (disassemble workspace jnz-va)))))))
-
-
-(deftest rec-dec-test
-  (let [workspace (load-file kern32)]
-    (testing "dis"
-      (is (= 0xCB (count (recursive-descent-disassemble workspace 0x68901000))))
-      (is (= true (contains? (recursive-descent-disassemble workspace 0x68901000) 0x68901010))))))
+      (is (= false (anal/indirect-target? (disassemble workspace call-va))))
+      (is (= false (anal/indirect-target? (disassemble workspace jnz-va)))))))
