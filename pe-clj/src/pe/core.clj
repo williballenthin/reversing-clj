@@ -1,7 +1,8 @@
 (ns pe.core
   (:gen-class)
   (:require [clojurewerkz.buffy.core :refer :all :as buffy]
-            [clojurewerkz.buffy.types :as t] [clojure.java.io :as io]
+            [clojurewerkz.buffy.types :as t]
+            [clojure.java.io :as io]
             [pe.macros :refer :all]
             [clojure.tools.logging :as log])
   (:import (java.io RandomAccessFile))
