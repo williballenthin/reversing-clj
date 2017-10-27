@@ -1,6 +1,7 @@
 (ns lancelot-clj.core
   (:gen-class)
   (:require
+   [clojure.string :as string]
    [pantomime.mime :as panto]
    [pe.core :as pe]
    [pe.macros :as pe-macros]
@@ -13,6 +14,7 @@
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.channels FileChannel FileChannel$MapMode))
+  (:import [java.security MessageDigest])
   (:import [capstone.Capstone])
   (:import [capstone.X86_const]))
 
@@ -24,7 +26,6 @@
   (if (not (nil? e))
     (conj c e)
     c))
-
 
 (defn- assoc-if [m k e]
   (if (not (nil? e))
@@ -101,6 +102,34 @@
      :pe pe
      :map (map-pe pe)
      :dis cs}))
+
+(defn byte-buffer-size
+  [byte-buffer]
+  (pe-macros/with-position byte-buffer 0
+    (.limit byte-buffer)))
+
+(defn byte-buffer->byte-array
+  [byte-buffer]
+  (let [size (byte-buffer-size byte-buffer)
+        _ (prn "size" size)
+        buf (byte-array size)]
+    (pe-macros/with-position byte-buffer 0
+      (.get byte-buffer buf))
+    buf))
+
+(defn get-hash
+  [byte-buffer algo]
+  (let [bytes (byte-buffer->byte-array byte-buffer) ;; TODO: watch memory size. could do this in chunks.
+        md5 (MessageDigest/getInstance algo)
+        hash (.digest md5 bytes)]
+    (string/join "" (map hex hash))))
+
+(defn get-hashes
+  [byte-buffer]
+  (into {} (for [[kw algo] {:md5 "MD5"
+                   :sha1 "SHA-1"
+                   :sha256 "SHA-256"}]
+             [kw (get-hash byte-buffer algo)])))
 
 (defn get-bytes
   [workspace va length]
