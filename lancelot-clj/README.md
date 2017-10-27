@@ -1,14 +1,17 @@
 # lancelot-clj
 
-FIXME: description
+Lancelot is a binary analysis framework.
 
 ## Installation
 
 requirements:
 
-  - capstone-clj
-  - pe-clj
+  - capstone-clj (make available native library & `lein install`)
+  - pe-clj (`lein install`)
 
+## Tests
+
+    lein test
 
 ## Usage
 
