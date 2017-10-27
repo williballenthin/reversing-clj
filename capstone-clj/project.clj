@@ -5,7 +5,8 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
                  [net.java.dev.jna/jna "4.1.0"]
-                 ;; to install capstone into the local maven repository:
+                 ;; first, build java capstone bindings:
+                 ;;  linux:
                  ;;    $ git clone https://github.com/aquynh/capstone.git
                  ;;    $ cd capstone
                  ;;    $ ./make.sh
@@ -13,6 +14,9 @@
                  ;;    $ sudo dnf install jna              # fedora
                  ;;    $ sudo apt-get install libjna-java  # ubuntu
                  ;;    $ make
+                 ;;  windows:
+                 ;;    see: https://github.com/aquynh/capstone/issues/1043
+                 ;; to install capstone into the local maven repository:
                  ;;    $ mvn install:install-file -Dfile=$(pwd)/capstone.jar
                  ;;                               -DgroupId=capstone
                  ;;                               -DartifactId=capstone
