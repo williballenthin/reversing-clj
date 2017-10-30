@@ -317,7 +317,9 @@
          ;; there is more than one relevant xref to this insn.
          ;; TODO: if addr == start-addr, then there should be none?
          ;; note: the current addr is *not* part of the basic block. its one past the end.
-         (< 1 (count (filter reachable-addrs (map :src (get flows-by-dst addr)))))
+         (and
+          (not= addr start-addr)
+          (< 1 (count (filter reachable-addrs (map :src (get flows-by-dst addr))))))
          bb-addrs
          ;; otherwise, keep scanning forward
          :else
