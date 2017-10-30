@@ -146,8 +146,14 @@
     (testing "function analysis"
       (let [raw-insns (disassemble-all cs buf base-addr)
             insn-analysis (analyze-instructions raw-insns)
-            bbs (get-function-blocks insn-analysis base-addr)]
-        (is (= (sort (keys bbs)) (list 0x0 0x16 0x1A 0x24))))))
+            bbs (get-function-blocks insn-analysis base-addr)
+            flows (into #{} (get-block-flows insn-analysis bbs))]
+        (is (= (sort (keys bbs)) (list 0x0 0x16 0x1A 0x24)))
+        (is (= true (contains? flows {:src 0x0  :dst 0x16 :type :fall-through})))
+        (is (= true (contains? flows {:src 0x16 :dst 0x1A :type :fall-through})))
+        (is (= true (contains? flows {:src 0x16 :dst 0x24 :type :cjmp})))
+        (is (= true (contains? flows {:src 0x1A :dst 0x16 :type :jmp}))))))
+
   (let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
         buf (make-byte-buffer [;;00000000 <A>:
                                ;;0:  b8 01 00 00 00          mov    eax,0x1
@@ -178,3 +184,4 @@
       (is (= '(0x0) (find-function-targets insn-analysis 0x16))))
     (testing "find-functions"
       (is (= #{0x0 0xB 0x16} (find-functions insn-analysis (list 0x0)))))))
+

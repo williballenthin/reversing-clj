@@ -461,3 +461,40 @@
   ([analysis start-addr]
    (let [reachable-addrs (find-reachable-addresses analysis start-addr)]
      (get-function-blocks analysis start-addr reachable-addrs))))
+
+
+(defn get-block-flows
+  "
+  compute the flow references among the given basic blocks.
+
+  Args:
+    analysis: instruction analysis results
+    blocks: map from block start address to sequence of instruction addresses
+
+  Returns:
+    sequence of maps with keys:
+      - src: block starting address
+      - dst: block starting address
+      - type: flow type keyword
+  "
+  [analysis blocks]
+  (filter some?
+          (flatten (let [block-starts (into #{} (keys blocks))]
+                     (for [block (vals blocks)]
+                       (let [last-addr (last block)
+                             last-insn (get (:insns-by-addr analysis) last-addr)
+                             succs (filter block-starts (map :add))]
+                         (for [flow (:flow last-insn)]
+                           (when (contains? block-starts (:address flow))
+                             {:src (first block)
+                              :type (:type flow)
+                              :dst (:address flow)}))))))))
+
+(defn analyze-function
+  [ws va]
+  (let [analysis (:analysis ws)
+        blocks (get-function-blocks analysis va)]
+    {:blocks blocks
+     :succs (index-by blocks :src)
+     :preds (index-by blocks :dst)}))
+
