@@ -43,13 +43,12 @@
 
 (defn panto-taste
   [byte-buffer]
-  (pe-macros/with-position byte-buffer 0x0
-    (let [;; should be able to get by with a 256 byte taste of the header.
-          arr (byte-array 0x100)
-          _ (.get byte-buffer arr)]
-      ;; delegate to pantomime, which asks apache tika.
-      ;; overkill, but easy.
-      (panto/mime-type-of arr))))
+  (let [byte-buffer' (at-position byte-buffer 0)
+        arr (byte-array 0x100)  ;; should be able to get by with a 256 byte taste of the header.
+        _ (.get byte-buffer' arr)]
+    ;; delegate to pantomime, which asks apache tika.
+    ;; overkill, but easy.
+    (panto/mime-type-of arr)))
 
 (defn pe32?
   [byte-buffer]
@@ -105,15 +104,15 @@
 
 (defn byte-buffer-size
   [byte-buffer]
-  (pe-macros/with-position byte-buffer 0
-    (.limit byte-buffer)))
+  (let [byte-buffer' (at-position byte-buffer 0)]
+    (.limit byte-buffer')))
 
 (defn byte-buffer->byte-array
   [byte-buffer]
-  (let [size (byte-buffer-size byte-buffer)
+  (let [byte-buffer' (at-position byte-buffer 0)
+        size (byte-buffer-size byte-buffer')
         buf (byte-array size)]
-    (pe-macros/with-position byte-buffer 0
-      (.get byte-buffer buf))
+    (.get byte-buffer' buf)
     buf))
 
 (defn get-hash
@@ -137,10 +136,10 @@
                               (:map workspace)))
         rva (- va (:start region))
         arr (byte-array length)
-        data (:data region)]
-    (pe-macros/with-position data rva
-      (.get data arr)
-      arr)))
+        data (:data region)
+        data' (at-position data rva)]
+    (.get data' arr)
+    arr))
 
 (defn disassemble
   [workspace va]

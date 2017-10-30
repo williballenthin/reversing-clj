@@ -3,7 +3,6 @@
   (:require [clojure.java.io :as io]
             [pantomime.mime :as panto]
             [pe.core :as pe]
-            [pe.macros :as pe-macros]
             [clojure.tools.logging :as log]
             [clojure.set :as set])
   (:import (java.io RandomAccessFile))
@@ -12,6 +11,11 @@
   (:import [capstone.Capstone])
   (:import [capstone.X86_const]))
 
+(defn at-position
+  [byte-buffer position]
+  (let [byte-buffer' (.duplicate byte-buffer)]
+    (.position byte-buffer' position)
+    byte-buffer'))
 
 (defn disassemble-one
   "
@@ -26,9 +30,8 @@
    (let [lim (.limit buf)
          remaining (- lim offset)
          arr (byte-array (min 0x10 remaining))  ;; assume each insn is at most 0x10 bytes long
-         b (pe-macros/with-position buf offset
-             (.get buf arr)
-             arr)]
+         buf' (at-position buf offset)]
+     (.get buf' arr)
      (first (.disasm dis arr rva 1))))
   ([dis buf rva]
    (disassemble-one dis buf rva 0x0)))
