@@ -2,6 +2,7 @@
   (:gen-class)
   (:require
             [pe.core :as pe]
+            [lancelot-clj.dis :refer :all]
             [clojure.set :as set]
             [clojure.tools.logging :as log])
   (:import [capstone.X86_const]))
