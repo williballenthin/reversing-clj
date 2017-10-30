@@ -16,6 +16,7 @@
     :entrypoint {:type :Function
                  :description "virtual address of entrypoint function of the sample"
                  :resolve :Sample/entrypoint}}}
+
   :Address
   {:description "content at a given address"
    :fields
@@ -24,10 +25,13 @@
     :insn {:type :Instruction
            :description "the disassembled instruction at this address"
            :resolve :Address/instruction}}}
+
   :Instruction
   {:description "a disassembled instruction"
    :fields
-   {:mnem {:type String
+   {:va {:type Int
+         :description "the virtual address of the instruction"}
+    :mnem {:type String
            :description "the human-readable mnenonic"}
     :size {:type Int
            :description "the length in bytes of this instruction"}
@@ -37,12 +41,14 @@
             :description "the human-readable reprsentation of the operands"}
     :str {:type String
           :description "the human-readable representation"}}}
+
   :Operand
   {:description "an operand to an instruction"
    :fields
    {:str {:type String
           :description "the human-readable representation"}}}
     ;; TODO: lots of other fields
+
   :Function
   {:description "a function"
    :fields
@@ -50,11 +56,47 @@
     :va {:type Int
          :description "the non-relocated function entry virtual address"}
     :address {:type :Address
-              :description "the content at the start of the function"
-              :resolve :Function/address}}}}
+              :description "the content at the start of the function"}
+    :blocks {:type (list :BasicBlock)
+             :description "the basic blocks of this function"
+             :resolve :Function/blocks}}}
+
+  :BasicBlock
+  {:description "a basic block"
+   :fields
+   {:va {:type Int
+         :description "the non-relocated basic block start virtual address"}
+    :address {:type :Address
+              :description "the content at the start of the function"}
+    :edges_to {:type (list :BasicBlockFlow)
+               :description "the basic blocks that flow to this basic block"
+               :resolve :BasicBlock/preds}
+    :edges_from {:type (list :BasicBlockFlow)
+                 :description "the basic blocks that flow from this basic block"
+                 :resolve :BasicBlock/succs}
+    :insns {:type (list :Instruction)
+            :description "the instructions in this basic block"
+            :resolve :BasicBlock/insns}}}
+
+  :BasicBlockFlow
+  {:description "a flow from one basic block to another"
+   :fields
+   {:src {:type :BasicBlock
+          :description "the source of the flow"}
+    :dst {:type :BasicBlock
+          :description "the destination of the flow"}
+    :type {:type (non-null String)  ;; TODO: enum? define the possible types.
+           :description "the type of the flow"}}}}
+
  :queries
- {:sample_by_md5  ;; TODO: can we use slash here?
+ {:sample_by_md5
   {:type :Sample
    :description "fetch sample by its MD5 hash"
    :args {:md5 {:type (non-null String)}}
-   :resolve :query/sample-by-md5}}}
+   :resolve :query/sample-by-md5}
+  :function_by_md5_va
+  {:type :Function
+   :description "fetch function by sample MD5 hash and virtual address"
+   :args {:md5 {:type (non-null String)}
+          :va {:type Int}}
+   :resolve :query/function-by-md5-va}}}
