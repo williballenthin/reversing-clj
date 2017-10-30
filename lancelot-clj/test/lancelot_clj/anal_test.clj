@@ -142,7 +142,12 @@
         (is (= (read-basic-block insn-analysis 0x1A)
                [0x1a 0x1c 0x1e 0x21 0x22]))
         (is (= (read-basic-block insn-analysis 0x24)
-               [0x24 0x25 0x26 0x27 0x28 0x29])))))
+               [0x24 0x25 0x26 0x27 0x28 0x29]))))
+    (testing "function analysis"
+      (let [raw-insns (disassemble-all cs buf base-addr)
+            insn-analysis (analyze-instructions raw-insns)
+            bbs (get-function-blocks insn-analysis base-addr)]
+        (is (= (sort (keys bbs)) (list 0x0 0x16 0x1A 0x24))))))
   (let [cs (make-capstone capstone.Capstone/CS_ARCH_X86 capstone.Capstone/CS_MODE_32)
         buf (make-byte-buffer [;;00000000 <A>:
                                ;;0:  b8 01 00 00 00          mov    eax,0x1

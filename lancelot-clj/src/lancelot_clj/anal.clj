@@ -423,3 +423,41 @@
          _ (log/info "analyzing...")
          insn-analysis (analyze-instructions raw-insns)]
      (merge workspace {:analysis insn-analysis}))))
+
+
+(defn get-function-blocks
+  "
+  compute the basic blocks in the function that starts at the given address.
+
+  example::
+
+      => (get-function-blocks ws 0x401000)
+      {0x401000: [0x401000 0x401003 0x401005]
+       0x401008: [0x401008 0x401009] ...}
+
+  Returns:
+    map: from basic block start addr to vector of addrs of insns in basic block.
+  "
+  ([analysis start-addr reachable-addrs]
+   (let [insns-by-addr (:insns-by-addr analysis)
+         reachable-addrs (find-reachable-addresses analysis start-addr)]
+     (loop [q (conj clojure.lang.PersistentQueue/EMPTY start-addr)
+            basic-blocks {}]
+       (if-let [addr (peek q)]
+         (if (contains? basic-blocks addr)
+           ;; if already processed, keep going
+           (recur (pop q) basic-blocks)
+
+           ;; else, read the basic block and update seen set.
+           (let [q (pop q)
+                 basic-block (read-basic-block analysis addr reachable-addrs)
+                 last-insn-addr (last basic-block)
+                 last-insn (get insns-by-addr last-insn-addr)
+                 flow-addrs (filter reachable-addrs (map :address (:flow last-insn)))]
+             (recur (apply conj q flow-addrs)
+                    (assoc basic-blocks addr basic-block))))
+         ;; when work is done, return set of seen addresses.
+         basic-blocks))))
+  ([analysis start-addr]
+   (let [reachable-addrs (find-reachable-addresses analysis start-addr)]
+     (get-function-blocks analysis start-addr reachable-addrs))))
