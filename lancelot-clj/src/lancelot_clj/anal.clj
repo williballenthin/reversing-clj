@@ -400,24 +400,24 @@
       ;; when work is done, return set of seen addresses.
       seen)))
 
-
 (defn analyze-workspace
   [workspace]
-  (let [text-section (pe/get-section (:pe workspace) ".text") ;; TODO: map all executable sections...
+  (if (some? (:analysis workspace))
+    workspace  ;; don't recompute analysis
+    (let [text-section (pe/get-section (:pe workspace) ".text") ;; TODO: map all executable sections...
 
-        text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
-        _ (log/info "text section at rva: " text-rva)
+         text-rva (get-in workspace [:pe :section-headers ".text" :VirtualAddress])
+         _ (log/info "text section at rva: " text-rva)
 
-        text-addr (pe/rva->va (:pe workspace) text-rva)
-        _ (log/info "text section at va: " text-addr)
+         text-addr (pe/rva->va (:pe workspace) text-rva)
+         _ (log/info "text section at va: " text-addr)
 
-        entry-addr (get-entrypoint (:pe workspace))
-        _ (log/info "entry va: " entry-addr)
+         entry-addr (get-entrypoint (:pe workspace))
+         _ (log/info "entry va: " entry-addr)
 
-        _ (log/info "disassembling...")
-        raw-insns (disassemble-all (:dis workspace) text-section text-addr)
+         _ (log/info "disassembling...")
+         raw-insns (disassemble-all (:dis workspace) text-section text-addr)
 
-        _ (log/info "analyzing...")
-        insn-analysis (analyze-instructions raw-insns)]
-    (merge workspace {:analysis insn-analysis})))
-
+         _ (log/info "analyzing...")
+         insn-analysis (analyze-instructions raw-insns)]
+     (merge workspace {:analysis insn-analysis}))))
