@@ -493,8 +493,10 @@
 (defn analyze-function
   [ws va]
   (let [analysis (:analysis ws)
-        blocks (get-function-blocks analysis va)]
+        blocks (get-function-blocks analysis va)
+        flows (get-block-flows analysis blocks)]
     {:blocks blocks
-     :succs (index-by blocks :src)
-     :preds (index-by blocks :dst)}))
+     :flows flows
+     :succs (group-by :src flows)
+     :preds (group-by :dst flows)}))
 
