@@ -7,7 +7,6 @@
    [pe.macros :as pe-macros]
    [lancelot-clj.dis :refer :all]
    [lancelot-clj.anal :refer :all]
-   [lancelot-clj.testutils :refer :all]
    [clojure.java.io :as io]
    [clojure.set :as set]
    [clojure.tools.logging :as log])
@@ -89,6 +88,15 @@
   (into [(map-pe-header pe)]
         (map #(map-pe-section pe %)
              (vals (:section-headers pe)))))
+
+(defn format-insn
+  "format the given  capstone instruction into a string"
+  [insn]
+  (when (some? insn)
+    (let [addr (.-address insn)
+          mnem (.-mnemonic insn)
+          op   (.-opStr insn)]
+      (format "0x%x %s %s" addr mnem op))))
 
 (defmethod load-bytes :pe32
   [byte-buffer]
