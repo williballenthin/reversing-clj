@@ -18,6 +18,7 @@
    [io.pedestal.http.route :as route]
    [io.pedestal.http.route.definition.table :as table]
    [io.pedestal.http.ring-middlewares :as middlewares]
+   [io.pedestal.http.secure-headers :as secure-headers]
    [clojure.java.browse :refer [browse-url]]
    [clojure.tools.logging :as log]))
 
@@ -100,6 +101,14 @@
             (swap! ctx assoc :ctx context)
             context)})
 
+
+(def script-domains [;; graphiql src hosts
+                     "cdn.jsdelivr.net" "unpkg.com"])
+(defn make-script-src-policy
+  [domains]
+  (str "'self' 'unsafe-inline' 'unsafe-eval' " (string/join " " domains)))
+
+
 (restart-dev)
 
 (def service-map
@@ -119,9 +128,16 @@
                                          middlewares/file-info
                                          ;; add content-type
                                          ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
-                                         middlewares/content-type] :route-name :rsrc]})
+                                         middlewares/content-type] :route-name :rsrc]
+                    ["/graphql/*file" :get [(strip-prefix "/graphql")
+                                            (middlewares/resource "/graphiql")
+                                            capture-ctx
+                                            middlewares/file-info] :route-name :graphiql]})
    ::http/type   :jetty
    ::http/port   8891
+   ::http/secure-headers {:content-security-policy-settings {:default-src "*"
+                                                             :style-src "'self' 'unsafe-inline'"
+                                                             :script-src (make-script-src-policy script-domains)}}
    ;; here's how to serve from `$project/resources/public` using the default resource interceptor.
    ;; ref: https://github.com/pedestal/pedestal/blob/60332b883120c604475a86d72fcbfcb0dba0d3ef/service-template/src/leiningen/new/pedestal_service/service.clj#L65
    ;; however, if you use this, then they override other routes?
