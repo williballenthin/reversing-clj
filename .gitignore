@@ -13,3 +13,4 @@ pom.xml.asc
 .nrepl-port
 *~
 *'
+/lancelot-clj/resources/public/client/js/cfg/api.js
