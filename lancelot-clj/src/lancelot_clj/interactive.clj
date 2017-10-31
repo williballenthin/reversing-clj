@@ -30,33 +30,12 @@
 
 (defonce ws (analyze-workspace (load-binary input-path)))
 
-(def schema (s/load-schema nil))
+(def schema (s/load-schema ws))
 
 #_(defn q
   [query-string]
   (-> (lacinia/execute schema query-string nil nil)
       s/simplify))
-
-
-
-#_(defn start-server
-  [_]
-  (let [server (-> schema
-                   (lp/pedestal-service {:graphiql true
-                                         :port 8888})
-                   add-my-routes
-                   http/create-server
-                   http/start)]
-    (browse-url "http://localhost:8888/")
-    server))
-
-
-
-(conj (lp/graphql-routes schema {:graphiql true
-                                 :port 8889
-                                 :resource-path "/public"
-                                 :env :dev})
-      ["/greet" :get respond-hello :route-name :greet])
 
 
 (defn respond-hello [request]
@@ -105,34 +84,41 @@
 (def script-domains [;; graphiql src hosts
                      "cdn.jsdelivr.net" "unpkg.com"])
 (defn make-script-src-policy
+  "format a script Content Security Policy that allows sources from the given domains."
   [domains]
   (str "'self' 'unsafe-inline' 'unsafe-eval' " (string/join " " domains)))
 
 
 (restart-dev)
 
+
 (def service-map
   {::http/routes (route/expand-routes
-                    ;; include the handler directly inline,
-                  #{["/greet" :get respond-hello :route-name :greet]
-                    ;; or as the final element in a vector,
-                    ["/greet2" :get [respond-hello] :route-name :greet2]
-                    ;; where the prior elements are interceptors.
-                    ["/greet3" :get [capture-ctx respond-hello] :route-name :greet3]
-                    ;; serve files with `middlewares/resource`, but ensure the path is correct.
-                    ;; TODO: there must be some built-in way to specify this prefix?
-                    ["/rsrc/*file" :get [(strip-prefix "/rsrc")
-                                         (middlewares/resource "/public")
-                                         ;; add content-type, content-length, last-modified
-                                         ;; ref: https://ring-clojure.github.io/ring/ring.middleware.file-info.html#var-wrap-file-info
-                                         middlewares/file-info
-                                         ;; add content-type
-                                         ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
-                                         middlewares/content-type] :route-name :rsrc]
-                    ["/graphql/*file" :get [(strip-prefix "/graphql")
-                                            (middlewares/resource "/graphiql")
-                                            capture-ctx
-                                            middlewares/file-info] :route-name :graphiql]})
+                  ;; include the handler directly inline,
+                  (set/union
+                   ;; the GraphQL endpoint will be: `/graphql`
+                   (lp/graphql-routes schema {})
+                   ;; and we'll still be able to host other resources.
+                   #{;; the handler can be specified directly,
+                     ["/greet" :get respond-hello :route-name :greet]
+                     ;; or as the final element in a vector,
+                     ["/greet2" :get [respond-hello] :route-name :greet2]
+                     ;; where the prior elements are interceptors.
+                     ["/greet3" :get [capture-ctx respond-hello] :route-name :greet3]
+                     ;; serve files with `middlewares/resource`, but ensure the path is correct.
+                     ;; TODO: there must be some built-in way to specify this prefix?
+                     ["/rsrc/*file" :get [(strip-prefix "/rsrc")
+                                          (middlewares/resource "/public")
+                                          ;; add content-type, content-length, last-modified
+                                          ;; ref: https://ring-clojure.github.io/ring/ring.middleware.file-info.html#var-wrap-file-info
+                                          middlewares/file-info
+                                          ;; add content-type
+                                          ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
+                                          middlewares/content-type] :route-name :rsrc]
+                     ["/graphiql/*file" :get [(strip-prefix "/graphiql")
+                                             (middlewares/resource "/graphiql")
+                                             capture-ctx
+                                             middlewares/file-info] :route-name :graphiql]}))
    ::http/type   :jetty
    ::http/port   8891
    ::http/secure-headers {:content-security-policy-settings {:default-src "*"
