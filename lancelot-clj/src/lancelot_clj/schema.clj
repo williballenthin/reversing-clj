@@ -77,13 +77,6 @@
 (defn resolve-block-preds
   [ws context args value]
   (let [{:keys [va func]} value]
-    (prn func)
-    (prn "a")
-    (prn (get-in func [:preds va]))
-    (doseq [pred (get-in func [:preds va])]
-      (prn (:src pred)))
-    (prn "b")
-
     (for [pred (get-in func [:preds va])]
       {:src {:va (:src pred) :address (:src pred) :func func}
        :dst {:va (:dst pred) :address (:dst pred) :func func}
