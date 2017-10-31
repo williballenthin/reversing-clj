@@ -113,7 +113,13 @@
                     ;; serve files with `middlewares/resource`, but ensure the path is correct.
                     ;; TODO: there must be some built-in way to specify this prefix?
                     ["/rsrc/*file" :get [(strip-prefix "/rsrc")
-                                         (middlewares/resource "/public")] :route-name :rsrc]})
+                                         (middlewares/resource "/public")
+                                         ;; add content-type, content-length, last-modified
+                                         ;; ref: https://ring-clojure.github.io/ring/ring.middleware.file-info.html#var-wrap-file-info
+                                         middlewares/file-info
+                                         ;; add content-type
+                                         ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
+                                         middlewares/content-type] :route-name :rsrc]})
    ::http/type   :jetty
    ::http/port   8891
    ;; here's how to serve from `$project/resources/public` using the default resource interceptor.
