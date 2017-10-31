@@ -18,6 +18,10 @@ requirements:
 ### client
 
     $ lein cljsbuild once client-dev
+    
+for figwheel:
+
+    $ lein figwheel
 
 ## Tests
 
