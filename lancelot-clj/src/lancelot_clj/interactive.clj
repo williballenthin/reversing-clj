@@ -116,9 +116,9 @@
                                           ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
                                           middlewares/content-type] :route-name :rsrc]
                      ["/graphiql/*file" :get [(strip-prefix "/graphiql")
-                                             (middlewares/resource "/graphiql")
-                                             capture-ctx
-                                             middlewares/file-info] :route-name :graphiql]}))
+                                              (middlewares/resource "/graphiql")
+                                              capture-ctx
+                                              middlewares/file-info] :route-name :graphiql]}))
    ::http/type   :jetty
    ::http/port   8891
    ::http/secure-headers {:content-security-policy-settings {:default-src "*"
