@@ -18,18 +18,19 @@
                  [com.walmartlabs/lacinia-pedestal "0.3.0"]
 
                  ;; for web client
-                 ;; 1.9.36 is the last version we can use before chrome gets mad
-                 ;;  about synchronous ajax requests in the main thread.
-                 [org.clojure/clojurescript "1.9.36"]
+                 [org.clojure/clojurescript "1.9.946"]
                  [org.omcljs/om "1.0.0-alpha47" :exclusions [cljsjs/react]]
                  ;; this one doesn't seem to work with om-alpha47
                  ;;[cljsjs/react-with-addons "15.4.2-2"]
                  [cljsjs/react-with-addons "15.3.1-0"]
                  [figwheel-sidecar "0.5.9-SNAPSHOT" :scope "test"]
-                 [cljs-ajax "0.5.8"]
+                 [cljs-ajax "0.7.2"]
                  [prismatic/om-tools "0.4.0"]
-                 [binaryage/devtools "0.9.2"]]
-  :plugins [[lein-cljsbuild "1.1.5"]]
+                 [binaryage/devtools "0.9.2"]
+                 ;; for graphql
+                 [vincit/venia "0.2.4"]]
+  :plugins [[lein-cljsbuild "1.1.5"]
+            [lein-figwheel "0.5.14"]]
   :main ^:skip-aot lancelot-clj.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}}
