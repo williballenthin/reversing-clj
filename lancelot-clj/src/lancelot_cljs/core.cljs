@@ -13,11 +13,13 @@
             [lancelot_cljs.common :as cmn]
             [lancelot_cljs.api :as r2]
             [lancelot_cljs.layout.dagre :as dagre]
-            [lancelot_cljs.layout.klay :as klay])
+            [lancelot_cljs.layout.klay :as klay]
+            [venia.core :as v])
   (:require-macros [cljs.core.async.macros :refer [go]]))
 
 
 (enable-console-print!)
+
 
 
 (defui Canvas
@@ -508,7 +510,7 @@
     (render! *model*)))
 
 
-(render! *model*)
+;;(render! *model*)
 
 
 (defn ensure-init
@@ -529,7 +531,12 @@
 
 
 
-(go
+#_(go
   (let [_ (<! (ensure-init))
         aflj (<! (r2/get-functions))]
     (update-model! [:functions] (cmn/index-by :offset (:response aflj)))))
+
+
+(def current-md5 "482D93562FC14E8FB4AFE9EE5E0F05F")
+(def query (v/graphql-query {:venia/queries [[:sample_by_md5{:md5 current-md5} [:md5 :sha1]]]}))
+(r2/http-graphql "/graphql" query prn prn)
