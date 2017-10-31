@@ -89,6 +89,13 @@
   (str "'self' 'unsafe-inline' 'unsafe-eval' " (string/join " " domains)))
 
 
+(def style-domains [;; client
+                    "fonts.googleapis.com"])
+(defn make-style-src-policy
+  "format a style Content Security Policy that allows sources from the given domains."
+  [domains]
+  (str "'self' 'unsafe-inline' " (string/join " " domains)))
+
 (restart-dev)
 
 
@@ -115,14 +122,22 @@
                                           ;; add content-type
                                           ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
                                           middlewares/content-type] :route-name :rsrc]
+                     ["/lancelot/*file" :get [(strip-prefix "/lancelot")
+                                              (middlewares/resource "/public/client")
+                                              ;; add content-type, content-length, last-modified
+                                              ;; ref: https://ring-clojure.github.io/ring/ring.middleware.file-info.html#var-wrap-file-info
+                                              middlewares/file-info
+                                              ;; add content-type
+                                              ;; ref: https://ring-clojure.github.io/ring/ring.middleware.content-type.html
+                                              middlewares/content-type] :route-name :client]
                      ["/graphiql/*file" :get [(strip-prefix "/graphiql")
-                                              (middlewares/resource "/graphiql")
+                                              (middlewares/resource "/public/graphiql")
                                               capture-ctx
                                               middlewares/file-info] :route-name :graphiql]}))
    ::http/type   :jetty
    ::http/port   8891
    ::http/secure-headers {:content-security-policy-settings {:default-src "*"
-                                                             :style-src "'self' 'unsafe-inline'"
+                                                             :style-src (make-style-src-policy style-domains)
                                                              :script-src (make-script-src-policy script-domains)}}
    ;; here's how to serve from `$project/resources/public` using the default resource interceptor.
    ;; ref: https://github.com/pedestal/pedestal/blob/60332b883120c604475a86d72fcbfcb0dba0d3ef/service-template/src/leiningen/new/pedestal_service/service.clj#L65
