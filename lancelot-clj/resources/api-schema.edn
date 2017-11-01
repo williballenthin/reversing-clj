@@ -89,7 +89,12 @@
            :description "the type of the flow"}}}}
 
  :queries
- {:sample_by_md5
+ {:samples
+  {:type (list :Sample)
+   :description "fetch all samples"
+   :args {}
+   :resolve :query/samples}
+  :sample_by_md5
   {:type :Sample
    :description "fetch sample by its MD5 hash"
    :args {:md5 {:type (non-null String)}}

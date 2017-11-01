@@ -23,6 +23,12 @@
   (merge {:va va
           :address {:va va}}))
 
+(defn resolve-samples
+  [ws context args value]
+  ;; while we only have a single workspace in our session,
+  ;; this routine is trivial.
+  (list (workspace->sample ws)))
+
 (defn resolve-sample-by-md5
   [ws context args value]
   (let [{:keys [md5]} args
@@ -98,7 +104,8 @@
 
 (defn resolver-map
   [ws]
-  {:query/sample-by-md5 (partial resolve-sample-by-md5 ws)
+  {:query/samples (partial resolve-samples ws)
+   :query/sample-by-md5 (partial resolve-sample-by-md5 ws)
    :query/function-by-md5-va (partial resolve-function-by-md5-va ws)
 
    :Sample/exports (partial resolve-sample-exports ws)

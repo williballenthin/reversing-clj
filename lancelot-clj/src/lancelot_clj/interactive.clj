@@ -96,7 +96,6 @@
   [domains]
   (str "'self' 'unsafe-inline' " (string/join " " domains)))
 
-(restart-dev)
 
 
 (def service-map
@@ -149,9 +148,6 @@
    ;; however, if you use this, then they override other routes?
    ;;::http/interceptors [(middlewares/resource "/public")]
    })
-
-
-
 
 (defn start []
   (http/start (http/create-server service-map)))
