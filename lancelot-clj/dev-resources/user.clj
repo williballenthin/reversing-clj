@@ -1,31 +1,17 @@
 (ns user
   (:require
-   [clojure.set :as set]
-   [clojure.string :as string]
    [clojure.java.io :as io]
    [clojure.tools.logging :as log]
-   [pe.core :as pe]
-   [pe.macros :as pe-macros]
-   [lancelot-clj.dis :refer :all]
-   [lancelot-clj.anal :refer :all]
-   [lancelot-clj.core :refer :all]
-   [lancelot-clj.api :refer :all]
-   [lancelot-clj.schema :as s]
-   [com.walmartlabs.lacinia.util :as util]
-   [com.walmartlabs.lacinia.schema :as schema]
+   [lancelot-clj.api :as api]
+   [lancelot-clj.anal :as analysis]
+   [lancelot-clj.schema :as schema]
+   [lancelot-clj.workspace :as workspace]
    [com.walmartlabs.lacinia :as lacinia]
-   [com.walmartlabs.lacinia.pedestal :as lp]
-   [io.pedestal.http :as http]
-   [io.pedestal.http.route :as route]
-   [io.pedestal.http.route.definition.table :as table]
-   [io.pedestal.http.ring-middlewares :as middlewares]
-   [io.pedestal.http.secure-headers :as secure-headers]
-   [clojure.java.browse :refer [browse-url]]
-   ))
+   [io.pedestal.http :as http])
+  (:import (ch.qos.logback.classic Logger Level)))
 
-#_(defmethod print-method Number
-  [n ^java.io.Writer w]
-  (.write w (format "0x%X" n)))
+(.setLevel
+ (org.slf4j.LoggerFactory/getLogger (Logger/ROOT_LOGGER_NAME)) Level/INFO)
 
 (defonce ws (atom nil))
 (defonce schema (atom nil))
@@ -34,16 +20,16 @@
 
 (defn load-ws []
   (reset! ws
-          (analyze-workspace
-           (load-binary (.getPath (clojure.java.io/resource "helloworld.exe")))))
+          (analysis/analyze-workspace
+           (workspace/load-binary (.getPath (clojure.java.io/resource "helloworld.exe")))))
   "ok")
 
 (defn load-schema []
-  (reset! schema (s/load-schema @ws))
+  (reset! schema (schema/load-schema @ws))
   "ok")
 
 (defn load-service-map []
-  (reset! service-map (make-service-map @schema))
+  (reset! service-map (api/make-service-map @schema))
   "ok")
 
 #_(defn q
@@ -69,4 +55,8 @@
 ;;(load-schema)
 ;;(load-service-map)
 ;;(start-http)
-(restart-http)
+;;(restart-http)
+
+#_(defmethod print-method Number
+    [n ^java.io.Writer w]
+    (.write w (format "0x%X" n)))

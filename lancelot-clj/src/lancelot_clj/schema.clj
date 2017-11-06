@@ -1,9 +1,8 @@
 (ns lancelot-clj.schema
   "resolvers and function to provide full schema"
   (:require
-   [lancelot-clj.dis :refer :all]
-   [lancelot-clj.anal :refer :all]
-   [lancelot-clj.core :refer :all]
+   [lancelot-clj.anal :as analysis]
+   [lancelot-clj.workspace :as workspace]
    [clojure.java.io :as io]
    [com.walmartlabs.lacinia.util :as util]
    [com.walmartlabs.lacinia.schema :as schema]
@@ -14,7 +13,7 @@
 (defn workspace->sample
   "see resources/api-schema.edn/:objects/:Sample"
   [ws]
-  (merge (get-hashes (:byte-buffer ws))
+  (merge (workspace/get-hashes (:byte-buffer ws))
          {:name "TODO"}))
 
 (defn va->function
@@ -32,23 +31,23 @@
 (defn resolve-sample-by-md5
   [ws context args value]
   (let [{:keys [md5]} args
-        current-hashes (get-hashes (:byte-buffer ws))]
+        current-hashes (workspace/get-hashes (:byte-buffer ws))]
     (when (= (:md5 current-hashes) md5)
       (workspace->sample ws))))
 
 (defn resolve-sample-exports
   [ws context args value]
-  (for [va (get-exports (:pe ws))]
+  (for [va (analysis/get-exports (:pe ws))]
     (va->function ws va)))
 
 (defn resolve-sample-entrypoint
   [ws context args value]
-  (va->function ws (get-entrypoint (:pe ws))))
+  (va->function ws (analysis/get-entrypoint (:pe ws))))
 
 (defn resolve-function-by-md5-va
   [ws context args value]
   (let [{:keys [md5 va]} args
-        current-hashes (get-hashes (:byte-buffer ws))]
+        current-hashes (workspace/get-hashes (:byte-buffer ws))]
     (when (= (:md5 current-hashes) md5)
       (va->function ws va))))
 
@@ -74,7 +73,7 @@
 (defn resolve-function-blocks
   [ws context args value]
   (let [{:keys [va]} value
-        func (analyze-function ws va)]
+        func (analysis/analyze-function ws va)]
     (for [[block-start block-addrs] (:blocks func)]
       {:va block-start
        :address {:va va} ;; TODO: va->address
