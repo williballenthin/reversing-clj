@@ -69,7 +69,7 @@
 (defn resolve-addr-insn
   [ws context args value]
   (let [{:keys [va]} value]
-    (va->insn ws va))
+    (va->insn ws va)))
 
 (defn resolve-function-blocks
   [ws context args value]
@@ -100,7 +100,7 @@
   [ws context args value]
   (let [{:keys [va func]} value
         insn-addrs (get-in func [:blocks va])]
-    (map #(va->insn ws %) insn-addrs))))
+    (map #(va->insn ws %) insn-addrs)))
 
 (defn resolver-map
   [ws]
