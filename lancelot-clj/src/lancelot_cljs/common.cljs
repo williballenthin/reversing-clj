@@ -1,6 +1,7 @@
 (ns lancelot_cljs.common
-  (:require [om.next :as om]
-            [cljs.pprint]))
+  (:require
+   [cljs.pprint]
+   ))
 
 (defn pp
   "via: http://stackoverflow.com/a/32108640/87207"

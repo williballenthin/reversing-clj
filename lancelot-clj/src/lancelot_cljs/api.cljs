@@ -96,7 +96,7 @@
    this is a GET-based request.
   "
   [url query s e]
-  (GET url {:format           :json
+  (GET url {:format          :json
             :response-format :json
             :keywords?       true
             :params          {:query query}

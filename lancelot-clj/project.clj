@@ -19,33 +19,36 @@
 
                  ;; for web client
                  [org.clojure/clojurescript "1.9.946"]
-                 [org.omcljs/om "1.0.0-alpha47" :exclusions [cljsjs/react]]
-                 ;; this one doesn't seem to work with om-alpha47
-                 ;;[cljsjs/react-with-addons "15.4.2-2"]
-                 [cljsjs/react-with-addons "15.3.1-0"]
                  [figwheel-sidecar "0.5.9-SNAPSHOT" :scope "test"]
-                 [cljs-ajax "0.7.2"]
-                 [prismatic/om-tools "0.4.0"]
-                 [binaryage/devtools "0.9.2"]
-                 ;; for graphql
-                 [vincit/venia "0.2.4"]]
+                 [binaryage/devtools "0.9.4"]
+                 [vincit/venia "0.2.4"]
+                 [reagent "0.7.0"]
+                 [re-frame "0.10.1"]
+                 [secretary "1.2.3"]
+                 [day8.re-frame/http-fx "0.1.4"]
+                 ]
   :plugins [[lein-cljsbuild "1.1.5"]
             [lein-figwheel "0.5.14"]]
   :main ^:skip-aot lancelot-clj.core
   :target-path "target/%s"
-  :profiles {:uberjar {:aot :all}}
+  :profiles {:uberjar {:aot :all}
+             :dev {:dependencies [[re-frisk "0.5.0"]]}}
 
   ;; for web client
   :cljsbuild {:builds [{:id "client-dev"
                         ;; The path to the top-level ClojureScript source directory:
                         :source-paths ["src"]
-                        :figwheel true
+                        ;;:figwheel true
                         ;; The standard ClojureScript compiler options:
                         ;; (See the ClojureScript compiler documentation for details.)
                         :compiler {:asset-path "js" ;; directory of `main.js` relative to `index.html`
                                    :output-to "resources/public/client/js/main.js"
                                    :output-dir "resources/public/client/js"
                                    :verbose true
+                                   :source-map true
+                                   :source-map-timestamp true
                                    :main lancelot_cljs.core
+                                   :preloads [re-frisk.preload]
                                    :optimizations :none
-                                   :pretty-print true}}]})
+                                   :pretty-print true}
+                        :figwheel {:on-jsload "lancelot_cljs.core/main"}}]})
