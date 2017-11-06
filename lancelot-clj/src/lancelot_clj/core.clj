@@ -51,7 +51,10 @@
 
 (defn pe32?
   [byte-buffer]
-  (= "application/x-msdownload; format=pe32" (panto-taste byte-buffer)))
+  (let [sig (panto-taste byte-buffer)]
+    (or
+     (= "application/x-msdownload; format=pe32" sig)
+     (= "application/x-msdownload" sig))))
 
 (defn detect-file-type
   [byte-buffer]
