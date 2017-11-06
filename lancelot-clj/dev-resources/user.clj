@@ -60,3 +60,4 @@
 #_(defmethod print-method Number
     [n ^java.io.Writer w]
     (.write w (format "0x%X" n)))
+

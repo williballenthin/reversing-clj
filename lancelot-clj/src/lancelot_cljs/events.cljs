@@ -78,5 +78,60 @@
 (reg-event-db
  :select-function
  (fn [db [_ function-va]]
-   (prn "select-function: " db function-va)
-   (assoc db :function function-va)))
+   (prn "select-function: " function-va)
+   (dispatch [:load-function function-va])
+   (-> db
+       (assoc :function function-va)
+       (dissoc :blocks)
+       (dissoc :edges)
+       (dissoc :insns))))
+
+(reg-event-fx
+ :load-function
+ (fn [{db :db} [_ function-va]]
+   (prn "load-function" function-va)
+   {:http-xhrio {:method :get
+                 :uri "/graphql"
+                 :params {:query (v/graphql-query
+                                  {:venia/queries [[:function_by_md5_va {:md5 (:sample db)
+                                                                         :va (:function db)}
+                                                    [[:blocks
+                                                      [:va
+                                                       [:edges_to
+                                                        [[:src [:va]]
+                                                         [:dst [:va]]
+                                                         :type]]
+                                                       [:edges_from
+                                                        [[:src [:va]]
+                                                         [:dst [:va]]
+                                                         :type]]
+                                                       [:insns
+                                                        [:va
+                                                         :mnem
+                                                         :opstr
+                                                         :size]]]
+                                                    ]]]]})}
+                 :format (ajax/json-request-format)
+                 :response-format (ajax/json-response-format {:keywords? true})
+                 :on-success [:loaded-function]
+                 :on-failure [:errored-function]}}))
+
+
+(reg-event-db
+ :loaded-function
+ (fn [db [_ response]]
+   (let [blocks (get-in response [:data :function_by_md5_va :blocks])
+         edges (concat (flatten (map :edges_to blocks))
+                       (flatten (map :edges_from blocks)))
+         edges' (into #{} edges)
+         insns (flatten (map :insns blocks))]
+     (prn "loaded function" insns)
+     (merge db {:blocks blocks
+                :edges edges'
+                :insns insns}))))
+
+(reg-event-db
+ :errored-function
+ (fn [db error]
+   (prn "errored-function: " error)
+   db))

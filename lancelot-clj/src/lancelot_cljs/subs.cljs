@@ -54,3 +54,23 @@
  :function
  (fn [db _]
    (:function db)))
+
+(reg-sub
+ :blocks
+ (fn [db _]
+   (:blocks db)))
+
+(reg-sub
+ :edges
+ (fn [db _]
+   (:edges db)))
+
+(reg-sub
+ :insns
+ (fn [db _]
+   (:insns db)))
+
+(reg-sub
+ :function-loaded?
+ (fn [db _]
+   (some? (:insns db))))
