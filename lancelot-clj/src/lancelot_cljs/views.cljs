@@ -129,6 +129,46 @@
   ([] (canvas {} [:div.empty])))
 
 
+(def sqrt (.-sqrt js/Math))
+(def PI (.-PI js/Math))
+(def atan2 (.-atan2 js/Math))
+
+;; these line drawing algorithms ripped directly from:
+;;  http://stackoverflow.com/questions/4270485/drawing-lines-on-html-page
+
+(defn geoline
+  [x y length angle]
+  [:div.line
+   {:style {:width (str length "em")
+            :transform (str "rotate(" angle "rad)")
+            :top (str y "em")
+            :left (str x "em")}}])
+
+(defn line
+  [x2 y2 x1 y1]
+  (let [a (- x1 x2)
+        b (- y1 y2)
+        c (sqrt
+           (+
+            (* a a)
+            (* b b)))
+        sx (/ (+ x1 x2) 2)
+        sy (/ (+ y1 y2) 2)
+        x (- sx (/ c 2))
+        y sy
+        alpha (- PI (atan2 (- b) a))]
+    (geoline x y c alpha)))
+
+(defn multi-line
+  [props children]
+  (let [class (:class props)
+        class (if class
+                (str "multi-line " class)
+                "multi-line")]
+    [:div
+     {:class class}
+     children]))
+
 (defn dis-app
   []
   [:div
@@ -149,8 +189,9 @@
       [:section#basic-blocks
        [:h3 "basic blocks:"]
        [canvas
-         (doall (for [va @(subscribe [:blocks])]
-                  ^{:key va}
-                  [basic-block va]))]])
+        [line 1 1 10 10]
+        #_(doall (for [va @(subscribe [:blocks])]
+                   ^{:key va}
+                   [basic-block va]))]])
     ]])
 
