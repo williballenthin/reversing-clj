@@ -33,11 +33,45 @@
      (let [va (:va insn)]
        ^{:key va} [:div (str (hex-format va) " " (:mnem insn) " " (:opstr insn))]))])
 
+(def <sub (comp deref re-frame.core/subscribe))
+(def >evt re-frame.core/dispatch)
+
+(defn basic-block
+  [va]
+  (let [block @(subscribe [:basic-block va])]
+    [:div.basic-block
+     [:div.bb-header "basic block " (hex-format (:va (<sub [:basic-block va])))]
+     [:div.bb-content
+      [:table
+       [:thead]
+       [:tbody
+        (for [insn (:insns @(subscribe [:basic-block va]))]
+          ^{:key (:va insn)}
+          [:tr.insn
+           [:td.addr (hex-format (:va insn))]
+           [:td.padding-1]
+           ;; TODO: re-enable bytes
+           [:td.bytes #_(str/upper-case (:bytes insn))]
+           [:td.padding-2]
+           [:td.mnem (:mnem insn)]
+           [:td.padding-3]
+           [:td.operands (:opstr insn)]
+           [:td.padding-4]
+           [:td.comments (when (and (:comments insn)
+                                    (not= "" (:comments insn)))
+                           (str ";  " (:comments insn)))]])]]]]))
+
+(defn canvas []
+  (let [foo (reagent/atom 0)]
+    (fn []
+      [:div.can "foo"])))
+
 (defn dis-app
   []
   [:div
    [:section#dis-app
     [:section#hello "Hello world!"]
+    [canvas]
     (if (not @(subscribe [:samples-loaded?]))
       [:section#loading-samples "loading samples..."]
       (sample-list @(subscribe [:samples])))
@@ -50,7 +84,10 @@
           [:h2 "functions:"]
           (function-list @(subscribe [:functions]))])])
     (when @(subscribe [:function-loaded?])
-      [:section#insns
-       [:h3 "instructions:"]
-       (insn-list @(subscribe [:insns]))])]])
+      [:section#basic-blocks
+       [:h3 "basic blocks:"]
+       (doall (for [va @(subscribe [:blocks])]
+                ^{:key va}
+                [basic-block va]))])
+    ]])
 

@@ -63,7 +63,7 @@
 (reg-sub
  :blocks
  (fn [db _]
-   (:blocks db)))
+   (keys (:blocks db))))
 
 (reg-sub
  :edges
@@ -79,3 +79,8 @@
  :function-loaded?
  (fn [db _]
    (some? (:insns db))))
+
+(reg-sub
+ :basic-block
+ (fn [db [_ va]]
+   (get-in db [:blocks va])))

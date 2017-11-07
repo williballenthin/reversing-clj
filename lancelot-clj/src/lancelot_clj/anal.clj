@@ -7,7 +7,6 @@
             [clojure.tools.logging :as log])
   (:import [capstone.X86_const]))
 
-
 (defn index-by
   "
   create a map indexed by the given key of the given collection.
