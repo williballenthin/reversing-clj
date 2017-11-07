@@ -4,6 +4,10 @@
             [clojure.string :as str]
             ))
 
+(defn hex-format
+  [n]
+  (str "0x" (str/upper-case (.toString n 16))))
+
 (defn sample-list
   [samples]
   [:section#samples
@@ -20,14 +24,14 @@
     (for [function functions]
       (let [va (:va function)]
         ^{:key va} [:div {:on-click #(dispatch [:select-function va])}
-                         (str va)]))])
+                         (hex-format va)]))])
 
 (defn insn-list
   [insns]
   [:ul
    (for [insn (sort :va insns)]
      (let [va (:va insn)]
-       ^{:key va} [:div (str va " " (:mnem insn) " " (:opstr insn))]))])
+       ^{:key va} [:div (str (hex-format va) " " (:mnem insn) " " (:opstr insn))]))])
 
 (defn dis-app
   []
