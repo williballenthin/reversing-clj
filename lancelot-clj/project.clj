@@ -22,13 +22,13 @@
                  [figwheel-sidecar "0.5.9-SNAPSHOT" :scope "test"]
                  [binaryage/devtools "0.9.4"]
                  [vincit/venia "0.2.4"]
-                 [reagent "0.7.0"]
-                 [re-frame "0.10.1"]
+                 [re-frame "0.10.2"]
                  [secretary "1.2.3"]
                  [day8.re-frame/http-fx "0.1.4"]
                  ]
   :plugins [[lein-cljsbuild "1.1.5"]
-            [lein-figwheel "0.5.14"]]
+            [lein-figwheel "0.5.14"]
+            [venantius/ultra "0.5.2"]]
   :main ^:skip-aot lancelot-clj.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}
