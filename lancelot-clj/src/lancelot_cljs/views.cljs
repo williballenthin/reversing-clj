@@ -169,6 +169,58 @@
      {:class class}
      children]))
 
+(defn compute-bb-height
+  "
+  units: em
+  "
+  [bb]
+  (let [insn-count (count (:insns bb))
+        ;; assume header size is 1em,
+        ;; which is defined in the css style.
+        header-size 1]
+    (+ header-size insn-count)))
+
+(defn compute-bb-width
+  "
+  units: em
+  "
+  [bb]
+  ;; the following constants are defined in the css style.
+  (let [padding-1-size 1
+        padding-2-size 1
+        padding-3-size 1
+        padding-4-size 1
+        bytes-size 12
+        mnem-size 6
+        operands-size (apply max (map #(count (:opstr %)) (:insns bb)))
+        comments-size (apply max (map #(count (:comments %)) (:insns bb)))]
+    (+ padding-1-size
+       padding-2-size
+       padding-3-size
+       padding-4-size
+       bytes-size
+       mnem-size
+       operands-size)))
+
+(defn compute-edges
+  [basic-blocks]
+  (remove nil?
+          (concat
+           (for [bb basic-blocks]
+             (when (:jump bb)
+               {:src (:addr bb) :dst (:jump bb) :type :jump}))
+           (for [bb basic-blocks]
+             (when (:fail bb)
+               {:src (:addr bb) :dst (:fail bb) :type :fail})))))
+
+(defn positioned
+  "wrap the given children with a div at the given x-y coordinates"
+  [{:keys [x y]} children]
+  [:div.laid-out
+   {:style {:top (str y "em")
+            :left (str x "em")}}
+   children])
+
 (defn dis-app
   []
   [:div
@@ -189,8 +241,7 @@
       [:section#basic-blocks
        [:h3 "basic blocks:"]
        [canvas
-        [line 1 1 10 10]
-        #_(doall (for [va @(subscribe [:blocks])]
+        (doall (for [va @(subscribe [:blocks])]
                    ^{:key va}
                    [basic-block va]))]])
     ]])
