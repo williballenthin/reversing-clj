@@ -61,7 +61,7 @@
                                     (not= "" (:comments insn)))
                            (str ";  " (:comments insn)))]])]]]]))
 
-(defn canvas []
+(defn canvas [children]
   (let [state (reagent/atom {:dragging false  ; is the user currently dragging?
                              :drag-x 0        ; the x delta since the user started dragging, 0 if not dragging
                              :drag-y 0        ; the y delta since the user started dragging, 0 if not dragging
@@ -70,21 +70,13 @@
                              :zoom 1.0})]     ; the zoom scale of the canvas
     (fn []
       [:div.canvas-viewport
-       {:style {:height "100px"
-                :width "400px"
-                :background-color "white"
-                }
-        :on-wheel
+       {:on-wheel
         (fn [e]
           (.preventDefault e)
           (let [delta (aget e "deltaY")]
             (if (> 0 delta)
-              (do
-                (prn "scroll in")
-                (swap! state update :zoom #(* 1.1 %)))
-              (do
-                (prn "scroll out")
-                (swap! state update :zoom #(* (/ 1 1.1) %))))))
+              (swap! state update :zoom #(* 1.1 %))
+              (swap! state update :zoom #(* (/ 1 1.1) %)))))
         :on-mouse-down
         (fn [e]
           (.preventDefault e)
@@ -125,17 +117,19 @@
        [:div.canvas
         {:style {:transform
                  (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
-                   (str "scale(" zoom  ") "
-                        "translate(" (/ (+ drag-x shift-left) zoom) "px, "
-                                     (/ (+ drag-y shift-top) zoom)  "px)"))}}
-        (str @state)]])))
+                   (str
+                    "translate(" (+ drag-x shift-left) "px, "
+                                 (+ drag-y shift-top)  "px) "
+                    "scale(" zoom  ") "
+                    ))}}
+        children
+        ]])))
 
 (defn dis-app
   []
   [:div
    [:section#dis-app
     [:section#hello "Hello world!"]
-    [canvas]
     (if (not @(subscribe [:samples-loaded?]))
       [:section#loading-samples "loading samples..."]
       (sample-list @(subscribe [:samples])))
@@ -150,8 +144,9 @@
     (when @(subscribe [:function-loaded?])
       [:section#basic-blocks
        [:h3 "basic blocks:"]
-       (doall (for [va @(subscribe [:blocks])]
-                ^{:key va}
-                [basic-block va]))])
+       [canvas
+         (doall (for [va @(subscribe [:blocks])]
+                  ^{:key va}
+                  [basic-block va]))]])
     ]])
 
