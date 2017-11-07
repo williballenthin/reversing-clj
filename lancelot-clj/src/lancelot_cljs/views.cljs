@@ -62,9 +62,73 @@
                            (str ";  " (:comments insn)))]])]]]]))
 
 (defn canvas []
-  (let [foo (reagent/atom 0)]
+  (let [state (reagent/atom {:dragging false  ; is the user currently dragging?
+                             :drag-x 0        ; the x delta since the user started dragging, 0 if not dragging
+                             :drag-y 0        ; the y delta since the user started dragging, 0 if not dragging
+                             :shift-left 0    ; the x translation of the canvas
+                             :shift-top 0     ; the y translation of the canvas
+                             :zoom 1.0})]     ; the zoom scale of the canvas
     (fn []
-      [:div.can "foo"])))
+      [:div.canvas-viewport
+       {:style {:height "100px"
+                :width "400px"
+                :background-color "white"
+                }
+        :on-wheel
+        (fn [e]
+          (.preventDefault e)
+          (let [delta (aget e "deltaY")]
+            (if (> 0 delta)
+              (do
+                (prn "scroll in")
+                (swap! state update :zoom #(* 1.1 %)))
+              (do
+                (prn "scroll out")
+                (swap! state update :zoom #(* (/ 1 1.1) %))))))
+        :on-mouse-down
+        (fn [e]
+          (.preventDefault e)
+          (let [evt (or e (js/event))
+                client-x (aget evt "clientX")
+                client-y (aget evt "clientY")]
+            (swap! state merge {:dragging true
+                                :down-x client-x
+                                :down-y client-y
+                                :drag-x 0
+                                :drag-y 0})))
+        :on-mouse-up
+        (fn [e]
+          (.preventDefault e)
+          (let [evt (or e (js/event))
+                client-x (aget evt "clientX")
+                client-y (aget evt "clientY")]
+            (swap! state #(-> %
+                              (dissoc :down-x)
+                              (dissoc :down-y)
+                              (merge {:dragging false
+                                      :drag-x 0
+                                      :drag-y 0
+                                      :shift-left (+ (:shift-left @state)
+                                                     (- client-x (:down-x @state)))
+                                      :shift-top (+ (:shift-top @state)
+                                                    (- client-y (:down-y @state)))})))))
+        :on-mouse-move
+        (fn [e]
+         (.preventDefault e)
+         (when (:dragging @state)
+           (let [evt (or e (js/event))
+                 client-x (aget evt "clientX")
+                 client-y (aget evt "clientY")]
+             (swap! state merge {:drag-x (- client-x (:down-x @state))
+                                 :drag-y (- client-y (:down-y @state))}))))
+       }
+       [:div.canvas
+        {:style {:transform
+                 (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
+                   (str "scale(" zoom  ") "
+                        "translate(" (/ (+ drag-x shift-left) zoom) "px, "
+                                     (/ (+ drag-y shift-top) zoom)  "px)"))}}
+        (str @state)]])))
 
 (defn dis-app
   []
