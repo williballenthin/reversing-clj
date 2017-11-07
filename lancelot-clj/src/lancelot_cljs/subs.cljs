@@ -3,6 +3,11 @@
             ))
 
 (reg-sub
+ :initialized?
+ (fn [db _]
+   (or (some? (:samples db)))))
+
+(reg-sub
  :samples-loaded?
  (fn [db _]
    (some? (:samples db))))

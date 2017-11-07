@@ -1,7 +1,7 @@
 (ns lancelot_cljs.core
   (:require [goog.events :as events]
             [reagent.core :as reagent]
-            [re-frame.core :refer [dispatch dispatch-sync]]
+            [re-frame.core :refer [dispatch dispatch-sync subscribe]]
             [secretary.core :as secretary]
             [lancelot_cljs.events]
             [lancelot_cljs.subs]
@@ -20,14 +20,9 @@
 ;;
 (defn ^:export main
   []
-  ;; Put an initial value into app-db.
-  ;; The event handler for `:initialize-db` can be found in `events.cljs`
-  ;; Using the sync version of dispatch means that value is in
-  ;; place before we go onto the next step.
-  (dispatch-sync [:initialize-db])
-
-  (dispatch [:load-samples])
-
+  (when (not @(subscribe [:initialized?]))
+    (dispatch-sync [:initialize-db])
+    (dispatch [:load-samples]))
   ;; Render the UI into the HTML's <div id="app" /> element
   ;; The view function `lancelot_cljs.views/dis-app` is the
   ;; root view for the entire UI.
