@@ -117,12 +117,21 @@
                  :on-failure [:errored-function]}}))
 
 
+(defn compute-edge-id
+  [edge]
+  (str (:src edge) "->" (:dst edge) "|" (:type edge)))
+
+(defn add-edge-id
+  [edge]
+  (assoc edge :id (compute-edge-id edge)))
+
 (defn api->edge
   [e]
   (-> e
       (update :type #(keyword (subs % 1)))  ; :type looks like ":cjmp", so trim the leading colon, and make it a keyword.
       (assoc :src (get-in e [:src :va]))    ; de-nest the src/dst addresses.
-      (assoc :dst (get-in e [:dst :va]))))
+      (assoc :dst (get-in e [:dst :va]))
+      (assoc :id (compute-edge-id e))))
 
 (reg-event-db
  :loaded-function

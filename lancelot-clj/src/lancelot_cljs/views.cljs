@@ -21,6 +21,12 @@
   [n]
   (str "0x" (str/upper-case (.toString n 16))))
 
+
+;;;
+;;; geometric/canvas drawing components
+;;;
+
+
 (defn canvas
   "
   component that renders the given children on a pan-able canvas.
@@ -180,6 +186,7 @@
 
 (defn geoline
   "draw a 'line' from the given x-y coordinates with the given length and angle.
+   the coordinates are given in ems.
    the angle is given in radians.
 
    you should probably CSS-style the line with:
@@ -207,34 +214,44 @@
         x (- sx (/ c 2))
         y sy
         alpha (- PI (atan2 (- b) a))]
-    ;; TODO: shouldn't have to set the key here.
-    ^{:key (str x y c alpha)}
     [geoline x y c alpha]))
+
+
+;;;
+;;; application components
+;;;
+
 
 (defn sample-list
   [samples]
   [:section#samples
    [:h1 "samples:"]
    [:ul
-    (for [sample samples]
-      ^{:key (:md5 sample)} [:div
-                             {:on-click #(dispatch [:select-sample (:md5 sample)])}
-                             (:md5 sample)])]])
+    (for [{md5 :md5} samples]
+      [:div
+        {:key md5
+         :on-click #(dispatch [:select-sample md5])}
+        md5])]])
 
 (defn function-list
   [functions]
   [:ul
-    (for [function functions]
-      (let [va (:va function)]
-        ^{:key va} [:div {:on-click #(dispatch [:select-function va])}
-                         (hex-format va)]))])
+   (for [{va :va} functions]
+     [:div
+       {:key va
+        :on-click #(dispatch [:select-function va])}
+       (hex-format va)])])
+
+(defn format-insn
+  [insn]
+  (str (hex-format (:va insn)) " " (:mnem insn) " " (:opstr insn)))
 
 (defn insn-list
   [insns]
   [:ul
    (for [insn (sort :va insns)]
-     (let [va (:va insn)]
-       ^{:key va} [:div (str (hex-format va) " " (:mnem insn) " " (:opstr insn))]))])
+    ^{:key (:va insn)}
+    [:div (format-insn insn)])])
 
 (defn basic-block
   [va]
@@ -249,21 +266,21 @@
           ^{:key (:va insn)}
           [:tr.insn
            [:td.va (hex-format (:va insn))]
-           [:td.padding-1]
+           [:td.padding-1 {:style {:min-width "1em"}}]
            ;; TODO: re-enable bytes
            [:td.bytes #_(str/upper-case (:bytes insn))]
-           [:td.padding-2]
+           [:td.padding-2 {:style {:min-width "1em"}}]
            [:td.mnem (:mnem insn)]
-           [:td.padding-3]
+           [:td.padding-3 {:style {:min-width "1em"}}]
            [:td.operands (:opstr insn)]
-           [:td.padding-4]
+           [:td.padding-4 {:style {:min-width "1em"}}]
            [:td.comments (when (and (:comments insn)
                                     (not= "" (:comments insn)))
                            (str ";  " (:comments insn)))]])]]]]))
 
 (defn compute-bb-height
-  "
-  units: em
+  "compute the height, in lines, of the given basic block.
+   when dealing when with em-based coordinate system, this is the height of the basic block component.
   "
   [bb]
   (let [insn-count (count (:insns bb))
@@ -273,11 +290,11 @@
     (+ header-size insn-count)))
 
 (defn compute-bb-width
-  "
-  units: em
+  "compute the width, in characters, of the given basic block
+   when dealing when with em-based coordinate system, this is the width of the basic block component.
   "
   [bb]
-  ;; the following constants are defined in the css style.
+  ;; the following constants are defined in the basic-block component.
   (let [padding-1-size 1
         padding-2-size 1
         padding-3-size 1
@@ -295,6 +312,9 @@
        operands-size)))
 
 (defn layout-cfg-klay
+  "invoke the klay library to layout the given basic blocks and edges.
+   the library will call the given success or error handlers, as appropriate.
+  "
   [basic-blocks edges s e]
   (when (< 0 (count (remove nil? basic-blocks)))
     (let [bbs (map #(-> %
@@ -315,60 +335,94 @@
                          :error err}))))))
 
 (defn layout-cfg
+  "invoke the layout library to layout the given blocks and edges.
+   the library will call the given success or error handlers, as appropriate.
+
+   Args:
+    basic-blocks: sequence of maps with keys:
+      - :va
+      - :insns
+    edges: sequence of maps with keys:
+      - :id
+      - :src
+      - :dst
+      - :type
+    s: function accepting arguments:
+      - nodes: sequence of maps with keys:
+        - :id: the va of the basic block
+        - :x
+        - :y
+      - edges: sequence of maps with keys:
+        - :id
+        - :type
+        - :points: sequence of maps with keys:
+          - :x
+          - :y
+    e: function accepting arguments:
+      - error: map of error details
+  "
   [basic-blocks edges s e]
   (layout-cfg-klay basic-blocks edges s e))
 ;;(layout-cfg-dagre basic-blocks s e))
 
 (defn edge-line
+  "draw a control-flow graph multi-segment line"
   [edge]
   [:div
    {:class (condp = (:type edge)
              :fall-through "edge-false"
-             "edge-true")}
+             :cjmp "edge-true"
+             :jmp "edge-jmp"
+             "edge-unk")}
    (doall
     (for [pair (partition 2 1 (:points edge))]
-      (let [start (first pair)
-            end (second pair)
-            x1 (:x start)
-            y1 (:y start)
-            x2 (:x end)
-            y2 (:y end)]
+      (let [{x1 :x y1 :y} (first pair)
+            {x2 :x y2 :y} (second pair)]
         ^{:key (str x1 "-" y1 "-" x2 "-" y2)}
-        (line x1 y1 x2 y2))))])
+        [line x1 y1 x2 y2])))])
 
+;; TODO: dup with events.cljs
 (defn compute-edge-id
-  [e]
-  (str (:src e) "->" (:dst e)))
+  [edge]
+  (str (:src edge) "->" (:dst edge) "|" (:type edge)))
 
 (defn add-edge-id
-  [e]
-  (assoc e :id (compute-edge-id e)))
+  [edge]
+  (assoc edge :id (compute-edge-id edge)))
 
 (defn function-graph
-  []
-  (let [layout (reagent/atom {})
-        blocks (vals (<sub [:blocks]))
-        edges (<sub [:edges])
-        ;; TODO: do this in layer 3.
-        edges (map add-edge-id edges)]
-    (layout-cfg blocks edges
-                (fn [{:keys [nodes edges]}]
-                  (swap! layout #(-> %
-                                     (assoc :nodes (utils/index-by :id nodes))
-                                     (assoc :edges (map add-edge-id edges)))))
-                prn)
-    (fn []
+  "display a control-flow graph of the given basic blocks and edges.
+  "
+  [basic-blocks edges]
+  ;; the implementation here is a little tricky because the layout engine is async.
+  ;; so, the `layout` atom contains the positions for nodes/edges.
+  ;; we'll populate this as soon as its available.
+  ;; until then, the blocks have a random placement.
+  (let [;; the edges are passed directly to `edge-line`.
+        ;; the nodes are x-y coordinates that must be correlated with existing basic blocks.
+        ;; the :id of the node matches the :va of the basic block.
+        layout (reagent/atom {:nodes {}
+                              :edges []})]
+    (layout-cfg
+      basic-blocks edges
+      (fn [{layout-nodes :nodes layout-edges :edges}]
+        (swap! layout merge {:nodes (utils/index-by :id layout-nodes)
+                             :edges (map add-edge-id layout-edges)}))
+      (fn [err] (prn "layout error: " err)))
+    (fn [_ _]
+      ;; note that we ignore the arguments to this re-render.
+      ;; instead we use the results of the layout from local state.
       [canvas
-       (concat (doall
-                (for [va @(subscribe [:block-addresses])]
-                  ^{:key va}
-                  [positioned
-                   (get-in @layout [:nodes va])
-                   [basic-block va]]))
-               (doall
-                (for [edge (:edges @layout)]
-                  ^{:key (:id edge)}
-                  [edge-line edge])))])))
+        (concat (doall
+                  (for [va (map :va basic-blocks)]
+                    ^{:key va}
+                    [positioned
+                      (get-in @layout [:nodes va])
+                      [basic-block va]]))
+                (doall
+                  (for [edge (:edges @layout)]
+                    ^{:key (:id edge)}
+                    [edge-line edge])))])))
 
 (defn dis-app
   []
@@ -389,5 +443,5 @@
     (when @(subscribe [:function-loaded?])
       [:section#basic-blocks
        [:h3 "basic blocks:"]
-       [function-graph]])
+       [function-graph (<sub [:blocks]) (<sub [:edges])]])
     ]])

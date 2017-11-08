@@ -65,10 +65,14 @@
  (fn [db _]
    (keys (:blocks db))))
 
+;; Returns:
+;;
+;;     [{:va int
+;;       :insns [{:va :mnem ...}]}]
 (reg-sub
  :blocks
  (fn [db _]
-   (:blocks db)))
+   (vals (:blocks db))))
 
 (reg-sub
  :edges
