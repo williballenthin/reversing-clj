@@ -3,6 +3,7 @@
    [re-frame.core :refer [reg-event-db
                           reg-event-fx
                           dispatch
+                          dispatch-sync
                           ]]
    [ajax.core :as ajax]
    [day8.re-frame.http-fx]
@@ -45,6 +46,14 @@
    (dispatch [:load-functions])
    (assoc db :sample sample-md5)))
 
+(reg-event-db
+ :unselect-sample
+ (fn [db _]
+   (prn "unselect-sample")
+   (-> db
+       (dissoc :function)
+       (dissoc :sample))))
+
 (reg-event-fx
  :load-functions
  (fn [{db :db} _]
@@ -85,6 +94,12 @@
        (dissoc :blocks)
        (dissoc :edges)
        (dissoc :insns))))
+
+(reg-event-db
+ :unselect-function
+ (fn [db _]
+   (prn "unselect-function")
+   (dissoc db :function)))
 
 (reg-event-fx
  :load-function

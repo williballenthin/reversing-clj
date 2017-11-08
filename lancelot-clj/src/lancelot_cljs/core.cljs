@@ -2,7 +2,6 @@
   (:require [goog.events :as events]
             [reagent.core :as reagent]
             [re-frame.core :refer [dispatch dispatch-sync subscribe]]
-            [secretary.core :as secretary]
             [lancelot_cljs.events]
             [lancelot_cljs.subs]
             [lancelot_cljs.views]

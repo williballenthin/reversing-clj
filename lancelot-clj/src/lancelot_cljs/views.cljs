@@ -1,5 +1,4 @@
 (ns lancelot-cljs.views
-
   (:require [reagent.core  :as reagent]
             [re-frame.core :refer [subscribe dispatch]]
             [clojure.string :as str]
@@ -21,6 +20,8 @@
   [n]
   (str "0x" (str/upper-case (.toString n 16))))
 
+(defn parse-hex [#^String s]
+  (js/parseInt s))
 
 ;;;
 ;;; geometric/canvas drawing components
@@ -225,23 +226,46 @@
 
 (defn sample-list
   [samples]
-  [:section#samples
-   [:h1 "samples:"]
-   [:ul
+  [:ul.sample-list
     (for [{md5 :md5} samples]
-      [:div
-        {:key md5
+      ^{:key md5}
+      [:li.sample-entry
+       [:a.sample-link
+        {:href "#"
          :on-click #(dispatch [:select-sample md5])}
-        md5])]])
+        md5]])])
 
 (defn function-list
   [functions]
-  [:ul
+  [:ul.function-list
    (for [{va :va} functions]
-     [:div
-       {:key va
+     ^{:key va}
+     [:li.function-entry
+      [:a.function-link
+       {:href "#"
         :on-click #(dispatch [:select-function va])}
-       (hex-format va)])])
+       (hex-format va)]])])
+
+(defn function-nav-bar
+  []
+  (let [value (reagent/atom "")
+        submit (fn []
+                (let [va (parse-hex @value)]
+                  (when (and (number? va) (not (js/isNaN va)))
+                    (dispatch [:select-function va]))))]
+    (fn []
+      [:div.function-nav-bar
+       [:input {:type "text"
+                :value @value
+                :on-change (fn [evt]
+                             (let [v (-> evt .-target .-value)]
+                               (reset! value v)))
+                :on-key-press (fn [e]
+                                (when (= 13 (.-charCode e))
+                                  (submit)))}]
+       [:input {:type "button"
+                :value "go"
+                :on-click submit}]])))
 
 (defn format-insn
   [insn]
@@ -425,22 +449,40 @@
                     ^{:key (:id edge)}
                     [edge-line edge])))])))
 
+(defn nav-bar
+  []
+  [:ul.nav
+   [:li.home
+    {:on-click #(dispatch [:unselect-sample])}
+    "root"]
+   (when (<sub [:sample-selected?])
+     [:li.sep "/"])
+   (when (<sub [:sample-selected?])
+     [:li.sample
+      {:on-click #(dispatch [:unselect-function])}
+      (<sub [:sample])])
+   (when (<sub [:function-selected?])
+     [:li.sep "/"])
+   (when (<sub [:function-selected?])
+     [:li.function (<sub [:function])])])
+
 (defn dis-app
   []
   [:div#dis-app
-   (if (not @(subscribe [:samples-loaded?]))
-     [:section#loading-samples "loading samples..."]
-     (sample-list @(subscribe [:samples])))
-   (when @(subscribe [:sample-selected?])
-     [:div#sample
-      [:h1 @(subscribe [:sample])]
-      (if (not @(subscribe [:functions-loaded?]))
-        [:section#loading-functions "loading functions..."]
-        [:section#functions
-         [:h2 "functions:"]
-         (function-list @(subscribe [:functions]))])])
-   (when @(subscribe [:function-loaded?])
+   [nav-bar]
+   (when (not (<sub [:sample-selected?]))
+     (if (not @(subscribe [:samples-loaded?]))
+       [:div#loading-samples "loading samples..."]
+       (sample-list @(subscribe [:samples]))))
+   (when (and (<sub [:sample-selected?])
+              (not (<sub [:function-selected?])))
+     (if (not (<sub [:functions-loaded?]))
+       [:div#loading-functions "loading functions..."]
+       [:div
+        [function-list (<sub [:functions])]
+        [function-nav-bar]]))
+   (when (and (<sub [:function-selected?])
+              (<sub [:function-loaded?]))
      [:section#basic-blocks
-      [:h3 "basic blocks:"]
       [function-graph (<sub [:blocks]) (<sub [:edges])]])
    ])

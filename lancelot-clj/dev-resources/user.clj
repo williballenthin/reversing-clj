@@ -56,6 +56,7 @@
 ;;(load-service-map)
 ;;(start-http)
 ;;(restart-http)
+;;(stop-http)
 
 #_(defmethod print-method Number
     [n ^java.io.Writer w]

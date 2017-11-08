@@ -104,6 +104,28 @@
             height: 100%;
           }
 
+          #dis-app ul.nav li {
+            display: block;
+            float: left;
+          }
+
+          #dis-app ul.nav::after {
+            content: "";
+            display: block;
+            clear: both;
+          }
+
+         ul.function-list,
+         ul.sample-list
+         {
+             list-style: square inside;
+         }
+
+          ul.nav li.sep {
+            margin-left: 1em;
+            margin-right: 1em;
+          }
+
           section#basic-blocks {
             width: 100%;
             height: 100%;
