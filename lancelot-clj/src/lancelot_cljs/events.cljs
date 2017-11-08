@@ -120,7 +120,8 @@
 (defn api->edge
   [e]
   (-> e
-      (assoc :src (get-in e [:src :va]))
+      (update :type #(keyword (subs % 1)))  ; :type looks like ":cjmp", so trim the leading colon, and make it a keyword.
+      (assoc :src (get-in e [:src :va]))    ; de-nest the src/dst addresses.
       (assoc :dst (get-in e [:dst :va]))))
 
 (reg-event-db

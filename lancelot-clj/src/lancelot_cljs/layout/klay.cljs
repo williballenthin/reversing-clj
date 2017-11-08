@@ -65,8 +65,8 @@
   [edge]
   {"source" (str (:src edge))
    "target" (str (:dst edge))
-   "type" (:type edge)
-   "id" (str (:src edge) (:type edge) (:dst edge))})
+   "type" (name (:type edge))
+   "id" (:id edge)})
 
 
 (defn add-edge
