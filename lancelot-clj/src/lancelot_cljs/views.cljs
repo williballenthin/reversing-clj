@@ -144,7 +144,8 @@
 
           })
         [:div.canvas
-         {:style {:transform-origin "center center"
+         {:style {:position "relative"               ; position relative so that children can be absolute relative to this element.
+                  :transform-origin "center center"
                   :transform
                   (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
                     (str
@@ -170,7 +171,7 @@
   "
   [{:keys [x y]} children]
   [:div.laid-out
-   {:style {:position "relative"  ; position relative to origin of the canvas.
+   {:style {:position "absolute"  ; absolute position is relative to origin of the canvas.
             :float "left"
             :display "inline"
             :top (str y "em")
@@ -426,22 +427,20 @@
 
 (defn dis-app
   []
-  [:div
-   [:section#dis-app
-    [:section#hello "Hello world!"]
-    (if (not @(subscribe [:samples-loaded?]))
-      [:section#loading-samples "loading samples..."]
-      (sample-list @(subscribe [:samples])))
-    (when @(subscribe [:sample-selected?])
-      [:div#sample
-       [:h1 @(subscribe [:sample])]
-       (if (not @(subscribe [:functions-loaded?]))
-         [:section#loading-functions "loading functions..."]
-         [:section#functions
-          [:h2 "functions:"]
-          (function-list @(subscribe [:functions]))])])
-    (when @(subscribe [:function-loaded?])
-      [:section#basic-blocks
-       [:h3 "basic blocks:"]
-       [function-graph (<sub [:blocks]) (<sub [:edges])]])
-    ]])
+  [:div#dis-app
+   (if (not @(subscribe [:samples-loaded?]))
+     [:section#loading-samples "loading samples..."]
+     (sample-list @(subscribe [:samples])))
+   (when @(subscribe [:sample-selected?])
+     [:div#sample
+      [:h1 @(subscribe [:sample])]
+      (if (not @(subscribe [:functions-loaded?]))
+        [:section#loading-functions "loading functions..."]
+        [:section#functions
+         [:h2 "functions:"]
+         (function-list @(subscribe [:functions]))])])
+   (when @(subscribe [:function-loaded?])
+     [:section#basic-blocks
+      [:h3 "basic blocks:"]
+      [function-graph (<sub [:blocks]) (<sub [:edges])]])
+   ])
