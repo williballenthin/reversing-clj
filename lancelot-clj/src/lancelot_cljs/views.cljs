@@ -151,10 +151,23 @@
   ([] (canvas {} [:div.empty])))
 
 (defn positioned
-  "wrap the given children with a div at the given x-y coordinates"
+  "wrap the given children with a div at the given x-y coordinates.
+   this is useful when you want to place an element on a canvas at a specific place.
+
+   example::
+
+       => [canvas
+           [positioned {:x 1 :y 10}
+            [:div#title 'hello world!']]
+           [positioned {:x 1 :y 12}
+            [:div#trailer 'goodbye world!']]]
+  "
   [{:keys [x y]} children]
   [:div.laid-out
-   {:style {:top (str y "em")
+   {:style {:position "relative"  ; position relative to origin of the canvas.
+            :float "left"
+            :display "inline"
+            :top (str y "em")
             :left (str x "em")}}
    children])
 
@@ -166,8 +179,14 @@
 ;;  http://stackoverflow.com/questions/4270485/drawing-lines-on-html-page
 
 (defn geoline
+  "draw a 'line' from the given x-y coordinates with the given length and angle.
+   the angle is given in radians.
+
+   you should probably CSS-style the line with:
+
+       border-top: <line-width>px solid #<color>;
+  "
   [x y length angle]
-  ^{:key (str x "-" y "-" length "-" angle)}
   [:div.line
    {:style {:width (str length "em")
             :transform (str "rotate(" angle "rad)")
@@ -175,6 +194,7 @@
             :left (str x "em")}}])
 
 (defn line
+  "draw a 'line' between the two given x-y coordinates."
   [x2 y2 x1 y1]
   (let [a (- x1 x2)
         b (- y1 y2)
@@ -187,17 +207,9 @@
         x (- sx (/ c 2))
         y sy
         alpha (- PI (atan2 (- b) a))]
-    (geoline x y c alpha)))
-
-(defn multi-line
-  [props children]
-  (let [class (:class props)
-        class (if class
-                (str "multi-line " class)
-                "multi-line")]
-    [:div
-     {:class class}
-     children]))
+    ;; TODO: shouldn't have to set the key here.
+    ^{:key (str x y c alpha)}
+    [geoline x y c alpha]))
 
 (defn sample-list
   [samples]
@@ -309,9 +321,9 @@
 
 (defn edge-line
   [edge]
-  (multi-line
+  [:div
    {:class (condp = (:type edge)
-             :fail "edge-false"
+             :fall-through "edge-false"
              "edge-true")}
    (doall
     (for [pair (partition 2 1 (:points edge))]
@@ -322,7 +334,7 @@
             x2 (:x end)
             y2 (:y end)]
         ^{:key (str x1 "-" y1 "-" x2 "-" y2)}
-        (line x1 y1 x2 y2))))))
+        (line x1 y1 x2 y2))))])
 
 (defn compute-edge-id
   [e]
