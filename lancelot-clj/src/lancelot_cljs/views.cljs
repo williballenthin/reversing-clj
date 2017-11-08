@@ -138,7 +138,8 @@
 
           })
         [:div.canvas
-         {:style {:transform
+         {:style {:transform-origin "center center"
+                  :transform
                   (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
                     (str
                      "translate(" (+ drag-x shift-left) "px, "
