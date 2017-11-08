@@ -117,13 +117,19 @@
                  :on-failure [:errored-function]}}))
 
 
+(defn api->edge
+  [e]
+  (-> e
+      (assoc :src (get-in e [:src :va]))
+      (assoc :dst (get-in e [:dst :va]))))
+
 (reg-event-db
  :loaded-function
  (fn [db [_ response]]
    (let [blocks (get-in response [:data :function_by_md5_va :blocks])
          edges (concat (flatten (map :edges_to blocks))
                        (flatten (map :edges_from blocks)))
-         edges' (into #{} edges)
+         edges' (into #{} (map api->edge edges))
          insns (flatten (map :insns blocks))]
      (prn "loaded function" insns)
      (merge db {:blocks (utils/index-by :va blocks)

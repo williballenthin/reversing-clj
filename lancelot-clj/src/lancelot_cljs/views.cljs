@@ -12,65 +12,131 @@
 (def >evt re-frame.core/dispatch)
 
 (defn hex-format
+  "format the given number into a hex string.
+
+   example::
+       => (hex-format 10)
+       '0xA'
+  "
   [n]
   (str "0x" (str/upper-case (.toString n 16))))
 
-
 (defn canvas
+  "
+  component that renders the given children on a pan-able canvas.
+  mouse click-drag pans the canvas, while mouse wheel in/out zooms it.
+
+  example::
+      => [canvas
+          [:h1#title 'hello world!']]
+  "
   ([meta children]
-   (let [state (reagent/atom {:dragging false  ; is the user currently dragging?
+   ;; this works by constructing a viewport over a "canvas" div containing the children.
+   ;; as the client moves the mouse to pan, we translate the canvas.
+   ;;
+   ;; we capture events at the viewport layer, and apply the translations to the canvas layer.
+   ;;
+   ;; the size of the canvas may exceed that of the viewport; its no problem, as we can use CSS to clip it.
+   ;;
+   (let [state (reagent/atom {:shift-left 0    ; the x translation of the canvas
+                              :shift-top 0     ; the y translation of the canvas
+                              :dragging false  ; is the user currently dragging?
                               :drag-x 0        ; the x delta since the user started dragging, 0 if not dragging
                               :drag-y 0        ; the y delta since the user started dragging, 0 if not dragging
-                              :shift-left 0    ; the x translation of the canvas
-                              :shift-top 0     ; the y translation of the canvas
                               :zoom 1.0})]     ; the zoom scale of the canvas
      (fn []
        [:div.canvas-viewport
         (merge
+         meta
          {:on-wheel
+          ;; handle zooming in/out.
+          ;; just a simple update to the zoom translation.
           (fn [e]
             (.preventDefault e)
-            (let [delta (aget e "deltaY")]
+            (let [zoom-factor 1.1
+                  delta (.-deltaY e)]
               (if (> 0 delta)
-                (swap! state update :zoom #(* 1.1 %))
-                (swap! state update :zoom #(* (/ 1 1.1) %)))))
+                (swap! state update :zoom #(* zoom-factor %))
+                (swap! state update :zoom #(/ % zoom-factor)))))
           :on-mouse-down
+          ;; handle the mouse starting a drag.
+          ;; on drag, we capture a few things:
+          ;;  - that dragging is in progress,
+          ;;  - where the dragging began, and
+          ;;  - the x-y delta from when when dragging began (always (0, 0) for :on-mouse-down)
+          ;;
+          ;; when we apply the translation to the canvas layer, the x-y coordinate gets calculated from:
+          ;;
+          ;;    (+ initial-location drag-delta)
+          ;;
+          ;; where drag-delta is:
+          ;;
+          ;;    (- current-drag-location drag-start)
           (fn [e]
             (.preventDefault e)
             (let [evt (or e (js/event))
-                  client-x (aget evt "clientX")
-                  client-y (aget evt "clientY")]
+                  client-x (.-clientX evt)
+                  client-y (.-clientY evt)]
               (swap! state merge {:dragging true
                                   :down-x client-x
                                   :down-y client-y
                                   :drag-x 0
                                   :drag-y 0})))
-          :on-mouse-up
+          :on-mouse-move
+          ;; handle mouse continuing a drag.
+          ;; we've already recorded where the drag started, so just need to update the drag-delta.
           (fn [e]
             (.preventDefault e)
-            (let [evt (or e (js/event))
-                  client-x (aget evt "clientX")
-                  client-y (aget evt "clientY")]
-              (swap! state #(-> %
-                                (dissoc :down-x)
-                                (dissoc :down-y)
-                                (merge {:dragging false
-                                        :drag-x 0
-                                        :drag-y 0
-                                        :shift-left (+ (:shift-left @state)
-                                                       (- client-x (:down-x @state)))
-                                        :shift-top (+ (:shift-top @state)
-                                                      (- client-y (:down-y @state)))})))))
-          :on-mouse-move
+            (when (:dragging @state)
+              (let [evt (or e (js/event))
+                    client-x (.-clientX evt)
+                    client-y (.-clientY evt)]
+                (swap! state merge {:drag-x (- client-x (:down-x @state))
+                                    :drag-y (- client-y (:down-y @state))}))))
+          :on-mouse-up
+          ;; handle the mouse ending a drag.
+          ;; now that the drag is complete, we commit the delta to the canvas layer position.
           (fn [e]
-           (.preventDefault e)
-           (when (:dragging @state)
-             (let [evt (or e (js/event))
-                   client-x (aget evt "clientX")
-                   client-y (aget evt "clientY")]
-               (swap! state merge {:drag-x (- client-x (:down-x @state))
-                                   :drag-y (- client-y (:down-y @state))}))))
-         } meta)
+            (.preventDefault e)
+            (when (:dragging @state)
+              (let [evt (or e (js/event))
+                    client-x (.-clientX evt)
+                    client-y (.-clientY evt)]
+                (swap! state #(-> %
+                                  (dissoc :down-x)
+                                  (dissoc :down-y)
+                                  (merge {:dragging false
+                                          :drag-x 0
+                                          :drag-y 0
+                                          :shift-left (+ (:shift-left @state)
+                                                         (- client-x (:down-x @state)))
+                                          :shift-top (+ (:shift-top @state)
+                                                        (- client-y (:down-y @state)))}))))))
+          :on-mouse-leave
+          ;; handle when the mouse exceeds the bounds of the viewport.
+          ;; commit the current drag, and end it.
+          ;; note this is a duplication of :on-mouse-up. TODO: refactor code.
+          ;;
+          ;; note: don't try to change this to use :on-mouse-out.
+          ;; that event fires when the mouse enters another element, which happens often during a lagging drag.
+          (fn [e]
+            (when (:dragging @state)
+              (.preventDefault e)
+              (let [evt (or e (js/event))
+                    client-x (.-clientX evt)
+                    client-y (.-clientY evt)]
+                (swap! state #(-> %
+                                  (dissoc :down-x)
+                                  (dissoc :down-y)
+                                  (merge {:dragging false
+                                          :drag-x 0
+                                          :drag-y 0
+                                          :shift-left (+ (:shift-left @state)
+                                                         (- client-x (:down-x @state)))
+                                          :shift-top (+ (:shift-top @state)
+                                                        (- client-y (:down-y @state)))}))))))
+
+          })
         [:div.canvas
          {:style {:transform
                   (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
@@ -257,30 +323,28 @@
         ^{:key (str x1 "-" y1 "-" x2 "-" y2)}
         (line x1 y1 x2 y2))))))
 
+(defn compute-edge-id
+  [e]
+  (str (:src e) "->" (:dst e)))
+
+(defn add-edge-id
+  [e]
+  (assoc e :id (compute-edge-id e)))
+
 (defn function-graph
   []
   (let [layout (reagent/atom {})
         blocks (vals (<sub [:blocks]))
         edges (<sub [:edges])
-        edges (map (fn [e]
-                     {:src (get-in e [:src :va])
-                      :dst (get-in e [:dst :va])
-                      :type (:type e)
-                      :id (str (get-in e [:src :va])
-                               "-"
-                               (get-in e [:dst :va]))})
-                   edges)]
+        ;; TODO: do this in layer 3.
+        edges (map add-edge-id edges)]
     (layout-cfg blocks edges
                 (fn [{:keys [nodes edges]}]
-                  (prn "layout complete")
-                  ;;(prn "nodes" nodes)
-                  ;;(prn "edges" edges)
                   (swap! layout #(-> %
                                      (assoc :nodes (utils/index-by :id nodes))
-                                     (assoc :edges edges))))
+                                     (assoc :edges (map add-edge-id edges)))))
                 prn)
     (fn []
-      (prn "render function graph")
       [canvas
        (concat (doall
                 (for [va @(subscribe [:block-addresses])]
@@ -291,7 +355,7 @@
                (doall
                 (for [edge (:edges @layout)]
                   ^{:key (:id edge)}
-                  (edge-line edge))))])))
+                  [edge-line edge])))])))
 
 (defn dis-app
   []
