@@ -61,9 +61,14 @@
    (:function db)))
 
 (reg-sub
- :blocks
+ :block-addresses
  (fn [db _]
    (keys (:blocks db))))
+
+(reg-sub
+ :blocks
+ (fn [db _]
+   (:blocks db)))
 
 (reg-sub
  :edges

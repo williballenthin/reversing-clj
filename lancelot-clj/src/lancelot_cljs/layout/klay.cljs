@@ -50,7 +50,7 @@
 
 (defn- cfg-bb->klay
   [bb]
-  {"id" (str (:addr bb))
+  {"id" (str (:va bb))
    "width" (:width bb)
    "height" (:height bb)
    "properties" {"de.cau.cs.kieler.portConstraints" "FIXED_SIDE"}})

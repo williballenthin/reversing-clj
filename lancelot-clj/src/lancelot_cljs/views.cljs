@@ -1,7 +1,11 @@
 (ns lancelot-cljs.views
+
   (:require [reagent.core  :as reagent]
             [re-frame.core :refer [subscribe dispatch]]
             [clojure.string :as str]
+            [lancelot_cljs.utils :as utils]
+            [lancelot_cljs.layout.klay :as klay]
+            [lancelot_cljs.layout.dagre :as dagre]
             ))
 
 (def <sub (comp deref re-frame.core/subscribe))
@@ -79,6 +83,13 @@
   ([children] (canvas {} children))
   ([] (canvas {} [:div.empty])))
 
+(defn positioned
+  "wrap the given children with a div at the given x-y coordinates"
+  [{:keys [x y]} children]
+  [:div.laid-out
+   {:style {:top (str y "em")
+            :left (str x "em")}}
+   children])
 
 (def sqrt (.-sqrt js/Math))
 (def PI (.-PI js/Math))
@@ -89,6 +100,7 @@
 
 (defn geoline
   [x y length angle]
+  ^{:key (str x "-" y "-" length "-" angle)}
   [:div.line
    {:style {:width (str length "em")
             :transform (str "rotate(" angle "rad)")
@@ -157,7 +169,7 @@
         (for [insn (:insns block)]
           ^{:key (:va insn)}
           [:tr.insn
-           [:td.addr (hex-format (:va insn))]
+           [:td.va (hex-format (:va insn))]
            [:td.padding-1]
            ;; TODO: re-enable bytes
            [:td.bytes #_(str/upper-case (:bytes insn))]
@@ -203,24 +215,83 @@
        mnem-size
        operands-size)))
 
-(defn compute-edges
-  [basic-blocks]
-  (remove nil?
-          (concat
-           (for [bb basic-blocks]
-             (when (:jump bb)
-               {:src (:addr bb) :dst (:jump bb) :type :jump}))
-           (for [bb basic-blocks]
-             (when (:fail bb)
-               {:src (:addr bb) :dst (:fail bb) :type :fail})))))
+(defn layout-cfg-klay
+  [basic-blocks edges s e]
+  (when (< 0 (count (remove nil? basic-blocks)))
+    (let [bbs (map #(-> %
+                        (assoc :width (compute-bb-width %))
+                        (assoc :height (compute-bb-height %))
+                        (dissoc :edges_to)
+                        (dissoc :edges_from))
+                   basic-blocks)
+          g (klay/make)
+          g (reduce klay/add-node g bbs)
+          g (reduce klay/add-edge g edges)]
+      (klay/layout g
+                   (fn [r]
+                     (s {:nodes (klay/get-nodes r)
+                         :edges (klay/get-edges r)}))
+                   (fn [err]
+                     (e {:msg "klay: error"
+                         :error err}))))))
 
-(defn positioned
-  "wrap the given children with a div at the given x-y coordinates"
-  [{:keys [x y]} children]
-  [:div.laid-out
-   {:style {:top (str y "em")
-            :left (str x "em")}}
-   children])
+(defn layout-cfg
+  [basic-blocks edges s e]
+  (layout-cfg-klay basic-blocks edges s e))
+;;(layout-cfg-dagre basic-blocks s e))
+
+(defn edge-line
+  [edge]
+  (multi-line
+   {:class (condp = (:type edge)
+             :fail "edge-false"
+             "edge-true")}
+   (doall
+    (for [pair (partition 2 1 (:points edge))]
+      (let [start (first pair)
+            end (second pair)
+            x1 (:x start)
+            y1 (:y start)
+            x2 (:x end)
+            y2 (:y end)]
+        ^{:key (str x1 "-" y1 "-" x2 "-" y2)}
+        (line x1 y1 x2 y2))))))
+
+(defn function-graph
+  []
+  (let [layout (reagent/atom {})
+        blocks (vals (<sub [:blocks]))
+        edges (<sub [:edges])
+        edges (map (fn [e]
+                     {:src (get-in e [:src :va])
+                      :dst (get-in e [:dst :va])
+                      :type (:type e)
+                      :id (str (get-in e [:src :va])
+                               "-"
+                               (get-in e [:dst :va]))})
+                   edges)]
+    (layout-cfg blocks edges
+                (fn [{:keys [nodes edges]}]
+                  (prn "layout complete")
+                  ;;(prn "nodes" nodes)
+                  ;;(prn "edges" edges)
+                  (swap! layout #(-> %
+                                     (assoc :nodes (utils/index-by :id nodes))
+                                     (assoc :edges edges))))
+                prn)
+    (fn []
+      (prn "render function graph")
+      [canvas
+       (concat (doall
+                (for [va @(subscribe [:block-addresses])]
+                  ^{:key va}
+                  [positioned
+                   (get-in @layout [:nodes va])
+                   [basic-block va]]))
+               (doall
+                (for [edge (:edges @layout)]
+                  ^{:key (:id edge)}
+                  (edge-line edge))))])))
 
 (defn dis-app
   []
@@ -241,8 +312,5 @@
     (when @(subscribe [:function-loaded?])
       [:section#basic-blocks
        [:h3 "basic blocks:"]
-       [canvas
-        (doall (for [va @(subscribe [:blocks])]
-                   ^{:key va}
-                   [basic-block va]))]])
+       [function-graph]])
     ]])
