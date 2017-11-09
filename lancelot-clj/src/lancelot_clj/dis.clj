@@ -66,3 +66,13 @@
                   (disassemble-one dis buf (+ rva offset) offset))
                 0x10000
                 (range (dec (.limit buf)))))
+
+(defn format-insn
+  "format the given  capstone instruction into a string"
+  [insn]
+  (when (some? insn)
+    (let [addr (.-address insn)
+          mnem (.-mnemonic insn)
+          op   (.-opStr insn)]
+      (format "0x%x %s %s" addr mnem op))))
+

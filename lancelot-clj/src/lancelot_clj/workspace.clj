@@ -6,8 +6,8 @@
    [clojure.tools.logging :as log]
    [pantomime.mime :as panto]
    [pe.core :as pe]
-   [lancelot-clj.anal :refer :all]
    [lancelot-clj.dis :refer :all]
+   [lancelot-clj.anal :refer :all]
    )
   (:import (java.io RandomAccessFile))
   (:import (java.nio ByteBuffer ByteOrder))
@@ -91,15 +91,6 @@
   (into [(map-pe-header pe)]
         (map #(map-pe-section pe %)
              (vals (:section-headers pe)))))
-
-(defn format-insn
-  "format the given  capstone instruction into a string"
-  [insn]
-  (when (some? insn)
-    (let [addr (.-address insn)
-          mnem (.-mnemonic insn)
-          op   (.-opStr insn)]
-      (format "0x%x %s %s" addr mnem op))))
 
 (defmethod load-bytes :pe32
   [byte-buffer]
