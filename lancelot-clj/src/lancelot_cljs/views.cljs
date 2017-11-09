@@ -151,9 +151,8 @@
                   (let [{:keys [zoom drag-x drag-y shift-left shift-top]} @state]
                     (str
                      "translate(" (+ drag-x shift-left) "px, "
-                                  (+ drag-y shift-top)  "px) "
-                     "scale(" zoom  ") "
-                     ))}}
+                     (+ drag-y shift-top)  "px) "
+                     "scale(" zoom  ") "))}}
          children]])))
   ([children] (canvas {} children))
   ([] (canvas {} [:div.empty])))
@@ -218,7 +217,6 @@
         alpha (- PI (atan2 (- b) a))]
     [geoline x y c alpha]))
 
-
 ;;;
 ;;; application components
 ;;;
@@ -227,13 +225,13 @@
 (defn sample-list
   [samples]
   [:ul.sample-list
-    (for [{md5 :md5} samples]
-      ^{:key md5}
-      [:li.sample-entry
-       [:a.sample-link
-        {:href "#"
-         :on-click #(dispatch [:select-sample md5])}
-        md5]])])
+   (for [{md5 :md5} samples]
+     ^{:key md5}
+     [:li.sample-entry
+      [:a.sample-link
+       {:href "#"
+        :on-click #(dispatch [:select-sample md5])}
+       md5]])])
 
 (defn function-list
   [functions]
@@ -250,9 +248,9 @@
   []
   (let [value (reagent/atom "")
         submit (fn []
-                (let [va (parse-hex @value)]
-                  (when (and (number? va) (not (js/isNaN va)))
-                    (dispatch [:select-function va]))))]
+                 (let [va (parse-hex @value)]
+                   (when (and (number? va) (not (js/isNaN va)))
+                     (dispatch [:select-function va]))))]
     (fn []
       [:div.function-nav-bar
        [:input {:type "text"
@@ -275,8 +273,8 @@
   [insns]
   [:ul
    (for [insn (sort :va insns)]
-    ^{:key (:va insn)}
-    [:div (format-insn insn)])])
+     ^{:key (:va insn)}
+     [:div (format-insn insn)])])
 
 (defn basic-block
   [va]
@@ -429,25 +427,25 @@
         layout (reagent/atom {:nodes {}
                               :edges []})]
     (layout-cfg
-      basic-blocks edges
-      (fn [{layout-nodes :nodes layout-edges :edges}]
-        (swap! layout merge {:nodes (utils/index-by :id layout-nodes)
-                             :edges (map add-edge-id layout-edges)}))
-      (fn [err] (prn "layout error: " err)))
+     basic-blocks edges
+     (fn [{layout-nodes :nodes layout-edges :edges}]
+       (swap! layout merge {:nodes (utils/index-by :id layout-nodes)
+                            :edges (map add-edge-id layout-edges)}))
+     (fn [err] (prn "layout error: " err)))
     (fn [_ _]
       ;; note that we ignore the arguments to this re-render.
       ;; instead we use the results of the layout from local state.
       [canvas
-        (concat (doall
-                  (for [va (map :va basic-blocks)]
-                    ^{:key va}
-                    [positioned
-                      (get-in @layout [:nodes va])
-                      [basic-block va]]))
-                (doall
-                  (for [edge (:edges @layout)]
-                    ^{:key (:id edge)}
-                    [edge-line edge])))])))
+       (concat (doall
+                (for [va (map :va basic-blocks)]
+                  ^{:key va}
+                  [positioned
+                   (get-in @layout [:nodes va])
+                   [basic-block va]]))
+               (doall
+                (for [edge (:edges @layout)]
+                  ^{:key (:id edge)}
+                  [edge-line edge])))])))
 
 (defn nav-bar
   []
@@ -484,5 +482,4 @@
    (when (and (<sub [:function-selected?])
               (<sub [:function-loaded?]))
      [:section#basic-blocks
-      [function-graph (<sub [:blocks]) (<sub [:edges])]])
-   ])
+      [function-graph (<sub [:blocks]) (<sub [:edges])]])])
