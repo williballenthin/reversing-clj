@@ -65,7 +65,7 @@
   (chunked-pmap (fn [offset]
                   (disassemble-one dis buf (+ rva offset) offset))
                 0x10000
-                (range (dec (.limit buf)))))
+                (range (.limit buf))))
 
 (defn format-insn
   "format the given  capstone instruction into a string"
