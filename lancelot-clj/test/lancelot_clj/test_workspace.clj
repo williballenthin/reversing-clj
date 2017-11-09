@@ -22,5 +22,4 @@
       ;; TODO: figure out how to get this equality working
       ;;(is (= (seq (into [] (get-bytes workspace 0x68901000 0x8))) (seq [0x90 0x90 0x90 0x90 0x90 0x90 0x90 0x90]))))
     (testing "disassemble"
-      (is (= (.-mnemonic (workspace/disassemble workspace 0x68901000)) "nop"))
-      (is (= (:mnem (workspace/op->clj (workspace/disassemble workspace 0x68901000))) "nop")))))
+      (is (= (.-mnemonic (workspace/disassemble workspace 0x68901000)) "nop")))))

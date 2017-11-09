@@ -148,16 +148,6 @@
   (let [code (get-bytes workspace va 0x10)]  ;; 0x10 is an arbitrary max-insn-length constant
     (first (.disasm (:dis workspace) code va 1))))
 
-(defn op->clj
-  "
-  converts a disassembled instruction into a clojure map.
-  useful for debugging.
-  "
-  [op]
-  {:address (.-address op)
-   :mnem (.-mnemonic op)
-   :op (.-opStr op)})
-
 (defn load-binary
   [path]
   (let [buf (map-file path)]
