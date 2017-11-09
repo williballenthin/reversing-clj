@@ -148,12 +148,26 @@
                (= (.. op1 value mem disp) 0)) true
           :default false)))))
 
+(defn fall-through?
+  [insn]
+  ;; we'd like to use `case` here, but capstone fields are not contants.
+  (condp = (.-id insn)
+      capstone.X86_const/X86_INS_RET false
+      capstone.X86_const/X86_INS_JMP false
+      capstone.X86_const/X86_INS_RETF false
+      capstone.X86_const/X86_INS_IRET false
+      capstone.X86_const/X86_INS_IRETD false
+      capstone.X86_const/X86_INS_IRETQ false
+      capstone.X86_const/X86_INS_INT false
+      capstone.X86_const/X86_INS_INT1 false
+      capstone.X86_const/X86_INS_INT3 false
+      capstone.X86_const/X86_INS_INTO false
+      true))
 
 (defn analyze-instruction-flow
   [insn]
   (-> #{}
-      (conj-if (when (not (or (ret? insn)
-                              (jmp? insn)))
+      (conj-if (when (fall-through? insn)
                  {:type :fall-through
                   :address (+ (. insn address) (. insn size))}))
       (conj-if (when (and (jmp? insn)
